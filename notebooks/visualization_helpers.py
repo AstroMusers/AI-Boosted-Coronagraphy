@@ -361,7 +361,6 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
                 
         plt.text(0.9, 1, instrume[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
         plt.text(0.9, 0.95, filtrs[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
-        _.patch.set_facecolor('#423f3b')
         plt.text(0.9, 0.05, targprop[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
         plt.text(0.9, 0, program[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
         _.patch.set_facecolor('#423f3b')
@@ -371,14 +370,14 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
 
         
         
-def plot_i2d(data,ncols,title,w,axis_points,filtrs,nrows=1,save=False):
+def plot_i2d(data,ncols,title,w,axis_points,filtrs,instrume,program,targprop,nrows=1,save=False):
 
     times = RA2time(w[0])
     y_labels = create_axis_label(times,fixed=2)
     x_labelish = [str(round(x_label,3)) for x_label in w[1]]
     x_labels = create_declination_labels(x_labelish)
     
-    _,axes = plt.subplots(nrows=1, ncols=ncols, figsize=(25,10))
+    _,axes = plt.subplots(nrows=1, ncols=ncols, figsize=(40,10))
     
     for index,(row,col) in enumerate(itertools.product(range(nrows),range(ncols))):
             
@@ -393,24 +392,24 @@ def plot_i2d(data,ncols,title,w,axis_points,filtrs,nrows=1,save=False):
                 axes[col].set_xticks(axis_points,x_labels,rotation=70)
                 axes[col].set_xlabel('DEC',fontsize=15,fontweight='bold')
                 axes[col].set_ylabel('RA',fontsize=15,fontweight='bold')
-    
-    
-            plt.text(0.9, 1, instrume[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
-        plt.text(0.9, 0.95, filtrs[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
-        _.patch.set_facecolor('#423f3b')
-        plt.text(0.9, 0.05, targprop[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
-        plt.text(0.9, 0, program[data], 
+        
+        
+        
+    plt.text(0.9, 1, instrume[index], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+    plt.text(0.9, 0.95, filtrs[index], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+    plt.text(0.9, 0.05, targprop[index], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+    plt.text(0.9, 0, program[index], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
     _.patch.set_facecolor('#423f3b')
     plt.subplots_adjust(wspace=0,hspace=0)
     plt.suptitle(title,y=1,x=0.5,fontsize=20,fontweight='bold')
     plt.show()
-    
+
     if save:
         plt.savefig(f'{title}.png')
     
     
     
-def plot_psfaligns(psfaligns,title,w,filtrs,detectors,axis_points):
+def plot_psfaligns(psfaligns,title,w,filtrs,instrume,program,targprop,axis_points):
     
     times = RA2time(w[0])
     y_labels = create_axis_label(times,fixed=2)
@@ -418,7 +417,7 @@ def plot_psfaligns(psfaligns,title,w,filtrs,detectors,axis_points):
     x_labels = create_declination_labels(x_labelish)
     
     
-    for data in range(len(psfaligns)):
+    for data in range(len(psfaligns)//2):
         
         nints = psfaligns[data].shape[0]
         npsfs = psfaligns[data].shape[1]
@@ -454,9 +453,13 @@ def plot_psfaligns(psfaligns,title,w,filtrs,detectors,axis_points):
                     axes[row][col].set_xticks([])
                       
             if ints == 0:
-                plt.text(0.85, 1, filtrs[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
-                plt.text(0.85, 0.95, detectors[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+                plt.text(0.9, 0.95, filtrs[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+                plt.text(0.9, 1, instrume[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+                plt.text(0.9, 0.05, targprop[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+                plt.text(0.9, 0, program[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
                 
+                
+            
             plt.text(0.10, 1, ints+1, fontsize=15,fontweight='bold',transform=plt.gcf().transFigure)
             _.patch.set_facecolor('#423f3b')
             plt.subplots_adjust(wspace=0,hspace=0)
@@ -464,7 +467,7 @@ def plot_psfaligns(psfaligns,title,w,filtrs,detectors,axis_points):
             plt.show()    
         
         
-def plot_psfsubs(psfsubs,title,w,filtrs,detectors,axis_points):
+def plot_psfsubs(psfsubs,title,w,filtrs,instrume,program,targprop,axis_points):
     
     times = RA2time(w[0])
     y_labels = create_axis_label(times,fixed=2)
@@ -495,8 +498,10 @@ def plot_psfsubs(psfsubs,title,w,filtrs,detectors,axis_points):
                 axes[col].set_xlabel('DEC',fontsize=15,fontweight='bold')
                 axes[col].set_ylabel('RA',fontsize=15,fontweight='bold')
         
-        plt.text(0.85, 1, filtrs[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
-        plt.text(0.85, 0.95, detectors[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+        plt.text(0.9, 1, instrume[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+        plt.text(0.9, 0.95, filtrs[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+        plt.text(0.9, 0.05, targprop[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+        plt.text(0.9, 0, program[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
         _.patch.set_facecolor('#423f3b')
         plt.subplots_adjust(wspace=0,hspace=0)
         plt.suptitle(title,y=1,x=0.5,fontsize=25,fontweight='bold')
@@ -504,7 +509,7 @@ def plot_psfsubs(psfsubs,title,w,filtrs,detectors,axis_points):
         
 
         
-def plot_i2d_mir(data,ncols,title,w,axis_points,filtrs,nrows=1,save=False):
+def plot_i2d_mir(data,ncols,title,w,axis_points,filtrs,instrume,program,targprop,nrows=1,save=False):
 
     times = RA2time(w[0])
     y_labels = create_axis_label(times,fixed=2)
@@ -528,6 +533,11 @@ def plot_i2d_mir(data,ncols,title,w,axis_points,filtrs,nrows=1,save=False):
                 axes[col].set_xlabel('DEC',fontsize=15,fontweight='bold')
                 axes[col].set_ylabel('RA',fontsize=15,fontweight='bold')
                 
+
+    plt.text(0.9, 1, instrume[index], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+    plt.text(0.9, 0.95, filtrs[index], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+    plt.text(0.9, 0.05, targprop[index], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+    plt.text(0.9, 0, program[index], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
     _.patch.set_facecolor('#423f3b')
     plt.subplots_adjust(wspace=0,hspace=0)
     #plt.suptitle(title,y=0.88,x=0.5,fontsize=20,fontweight='bold')
