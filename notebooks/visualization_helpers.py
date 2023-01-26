@@ -243,23 +243,15 @@ def create_declination_labels(labelish,fixed=2):
     return labels
 
 
-def get_filters(header):
+def get_headers(header,header_name):
     
-    filtrs = []
+    headers = []
     for i in range(len(header)):
         
-        filtrs.append(header[i]['FILTER'])
+        headers.append(header[i][f'{header_name.upper()}'])
     
-    return filtrs
+    return headers
 
-def get_detectors(header):
-    
-    detectors = []
-    for i in range(len(header)):
-        
-        detectors.append(header[i]['DETECTOR'])
-    
-    return detectors
 
 def check_hdu_dims(file,hdu:int):
     
@@ -334,7 +326,7 @@ def plot_calints(calints,sci_calints,header_calints,title,instrume):
     
     
     
-def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,detectors,instrume):
+def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program,targprop):
     
     times = RA2time(w[0])
     y_labels = create_axis_label(times,fixed=2)
@@ -345,10 +337,10 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,detectors,instru
     for data in range(len(psfstack)):
         
         
-        if instrume == 'NIRCAM':
+        if instrume[data] == 'NIRCAM':
             _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(36,8))
         
-        elif instrume == 'MIRI':
+        elif instrume[data] == 'MIRI':
             _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(46,8))
         
 
@@ -367,8 +359,11 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,detectors,instru
                 axes[row][col].set_yticks([])
                 axes[row][col].set_xticks([])
                 
-        plt.text(0.9, 1, filtrs[data], fontsize=25,fontweight='bold',transform=plt.gcf().transFigure)
-        plt.text(0.85, 0.95, detectors[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+        plt.text(0.9, 1, instrume[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+        plt.text(0.9, 0.95, filtrs[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+        _.patch.set_facecolor('#423f3b')
+        plt.text(0.9, 0.05, targprop[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+        plt.text(0.9, 0, program[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
         _.patch.set_facecolor('#423f3b')
         plt.subplots_adjust(wspace=0,hspace=0)
         plt.suptitle(title,y=1,x=0.5,fontsize=25,fontweight='bold')
@@ -398,10 +393,16 @@ def plot_i2d(data,ncols,title,w,axis_points,filtrs,nrows=1,save=False):
                 axes[col].set_xticks(axis_points,x_labels,rotation=70)
                 axes[col].set_xlabel('DEC',fontsize=15,fontweight='bold')
                 axes[col].set_ylabel('RA',fontsize=15,fontweight='bold')
-                
+    
+    
+            plt.text(0.9, 1, instrume[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+        plt.text(0.9, 0.95, filtrs[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+        _.patch.set_facecolor('#423f3b')
+        plt.text(0.9, 0.05, targprop[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+        plt.text(0.9, 0, program[data], 
     _.patch.set_facecolor('#423f3b')
     plt.subplots_adjust(wspace=0,hspace=0)
-    #plt.suptitle(title,y=0.85,x=0.5,fontsize=20,fontweight='bold')
+    plt.suptitle(title,y=1,x=0.5,fontsize=20,fontweight='bold')
     plt.show()
     
     if save:
