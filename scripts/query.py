@@ -1,10 +1,7 @@
 import os
-import glob
-import json
 import sys
 
 import pandas as pd
-import matplotlib.pyplot as plt
 
 from astropy.io import fits
 from astropy.table import unique, vstack
@@ -14,7 +11,8 @@ from astroquery.mast import Mast,Observations
 
 import jwst
 
-sys.path.insert(0, '../util')
+main_dir = '/'.join(os.path.realpath(__file__).split('/')[:-2])
+sys.path.insert(0, main_dir + '/util')
 
 from util_type import SERVICE, query_keywords, mast_request_params, PSGD
 from util_main import get_mast_token, get_dataset_dir
@@ -22,7 +20,7 @@ from util_main import get_mast_token, get_dataset_dir
 
 class Query():
     def __init__(self, service:SERVICE, keywords: query_keywords, proposal_id: str, psgd: PSGD):
-        print(f"Query.py file activated. Current JWST Version: {jwst.__version__}")
+        print(f"Query.py script activated. Current JWST Version: {jwst.__version__}")
 
         # query param initialization
         self.service: SERVICE = service
@@ -75,8 +73,8 @@ class Query():
                                                         productSubGroupDescription = self.psgd
                                                         )
 
-        except:
-            raise Exception('Mast Service Connection Failure!')
+        except Exception as e:
+            raise Exception(f'Mast Service Connection Failure! \n Error: {e}')
         
         del t, fn, ids, matched_obs, batch_size, batches
         return self.products, self.filtered_products
@@ -128,11 +126,13 @@ class Query():
         dataset_dir = dataset_dir + f"/{self.keywords['instrume'][0]}/{self.proposal_id}"
         try:
             print(f"Observations are downloading from Mast Server. \n Download Info: \n Instrume: {self.keywords['instrume'][0]} \n Proposal_id: {self.proposal_id} \n Dir: {dataset_dir}")
-            self.coron_files = Observations.download_products(self.filtered_products, download_dir = dataset_dir)
-        except:
-            raise Exception("Download failed! This problem can occur due to internet issues.")
+            Observations.download_products(self.filtered_products, download_dir = dataset_dir)
+            print(f"Observations are downloaded from Mast Server. \n Download Info: \n Instrume: {self.keywords['instrume'][0]} \n Proposal_id: {self.proposal_id} \n Dir: {dataset_dir}")
 
-        del dataset_dir, mast_token
+        except Exception as e:
+            raise Exception(f'Download failed! \n Error: {e}')
+
+        del dataset_dir, mast_token,
 
 if __name__ == "__main__":
 
@@ -153,7 +153,6 @@ if __name__ == "__main__":
     query = Query(service=service, keywords=keywords, proposal_id=proposal_id, psgd = psgd)
 
     # Get proposal products
-    #products, filtered_products = query.get_proposal_products()
     _, _ = query.get_proposal_products()
 
     # ASN and Rateints count control
