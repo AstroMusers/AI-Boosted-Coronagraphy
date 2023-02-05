@@ -3,3 +3,4 @@ dataset/
 notebooks/data/
 secrets/
 scripts/__pycache__/
+utils/__pycache__/
