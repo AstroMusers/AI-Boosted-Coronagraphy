@@ -1,4 +1,7 @@
 dataset/
 .ipynb_checkpoints/
-
 notebooks/data/
+secrets/
+scripts/__pycache__/
+utils/__pycache__/
+
