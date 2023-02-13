@@ -15,13 +15,17 @@ from IPython.display import display
 
 
 
+
+
+
+
+
 def get_lower_products(suffix,directory):
     return glob(os.path.join(directory, f'**/*{suffix}.fits'))
 
 
 def get_stage3_products(suffix,directory):
     return glob(os.path.join(directory, f'*{suffix}.fits'))
-
 
 
 def plot_psfaligns(psfaligns,title,w,filtrs,detectors,axis_points):
@@ -267,8 +271,15 @@ def check_hdu_dims(file,hdu:int):
         
     return dims
 
-def pixel_to_arcsec(axis_length):
-    x = 1 / 0.031 
+def pixel_to_arcsec_nircam(axis_length,wavelength):
+    
+    short_wavelengths = ['F187N','F212N','F182M','F210M','F200W']
+    
+    if wavelength in short_wavelengths:
+        x = 1 / 0.031 
+    
+    else:
+        x = 1 / 0.063
     
     zero_point = axis_length / 2
     pos_current_point = zero_point
@@ -354,10 +365,6 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
     x_labelish = [str(round(x_label,3)) for x_label in w[1]]
     x_labels = create_declination_labels(x_labelish)
     
-    arcsec_labels = [-4,-3,-2,-1,0,1,2,3,4]
-    
-    y_axis_arcsec = [ y for y in np.sort(pixel_to_arcsec(320))]
-    
     for data in range(len(psfstack)):
         
         
@@ -365,8 +372,18 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
             _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(36,8))
         
         elif instrume[data] == 'MIRI':
-            _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(46,8))
+            _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(28,8))
         
+        y_axis_arcsec = [ y for y in np.sort(pixel_to_arcsec_nircam(320,wavelength=filtrs[data]))]
+        
+        negative = [-x for x in range((len(y_axis_arcsec)//2)+1)]
+        positive = [ x for x in range((len(y_axis_arcsec)//2)+1)]
+        arcsec_labels = negative + positive
+        arcsec_labels = arcsec_labels[1:]
+        arcsec_labels.sort()
+        
+        #print(y_axis_arcsec)
+        #print(type(y_axis_arcsec))
 
         for psf,(row,col) in enumerate(itertools.product(range(nrow),range(ncol))):
             
@@ -375,6 +392,7 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
             
             
             if (row == 1) & (col == 0):
+
                 axes[row][col].set_yticks(axis_points,y_labels,rotation=45)
                 axes[row][col].set_xticks(axis_points,x_labels,rotation=70)
                 axes[row][col].set_xlabel('DEC',fontsize=15,fontweight='bold')
@@ -382,7 +400,9 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
             
             elif (row ==1) & (col == 8):
                 axes[row][col].yaxis.tick_right()
-                axes[row][col].set_yticks(y_axis_arcsec,arcsec_labels,rotation=45)
+                axes[row][col].set_yticks(y_axis_arcsec,arcsec_labels,rotation=15)
+                axes[row][col].yaxis.set_label_position("right")
+                axes[row][col].set_ylabel('PIX2ARCSEC',fontsize=15,fontweight='bold')
                 axes[row][col].set_xticks([])
             
             else:
