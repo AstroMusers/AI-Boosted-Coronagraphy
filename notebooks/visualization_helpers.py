@@ -63,6 +63,7 @@ def plot_psfaligns(psfaligns,title,w,filtrs,detectors,axis_points):
                     axes[row][col].set_xlabel('DEC',fontsize=15,fontweight='bold')
                     axes[row][col].set_ylabel('RA',fontsize=15,fontweight='bold')
                     
+                    
                 else:
                     axes[row][col].set_yticks([])
                     axes[row][col].set_xticks([])
@@ -266,6 +267,26 @@ def check_hdu_dims(file,hdu:int):
         
     return dims
 
+def pixel_to_arcsec(axis_length):
+    x = 1 / 0.031 
+    
+    zero_point = axis_length / 2
+    pos_current_point = zero_point
+    neg_current_point = zero_point
+    
+    arcsec_axis_points = [zero_point]
+
+    while (pos_current_point + x) < axis_length:
+        pos_current_point += x
+        neg_current_point -= x
+        #print(pos_current_point)
+        arcsec_axis_points.append(pos_current_point)
+        arcsec_axis_points.append(neg_current_point)
+    
+    
+    
+    return arcsec_axis_points
+
 
 
 def plot_calints(calints,sci_calints,header_calints,title,instrume):
@@ -333,6 +354,9 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
     x_labelish = [str(round(x_label,3)) for x_label in w[1]]
     x_labels = create_declination_labels(x_labelish)
     
+    arcsec_labels = [-4,-3,-2,-1,0,1,2,3,4]
+    
+    y_axis_arcsec = [ y for y in np.sort(pixel_to_arcsec(320))]
     
     for data in range(len(psfstack)):
         
@@ -355,6 +379,12 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
                 axes[row][col].set_xticks(axis_points,x_labels,rotation=70)
                 axes[row][col].set_xlabel('DEC',fontsize=15,fontweight='bold')
                 axes[row][col].set_ylabel('RA',fontsize=15,fontweight='bold')
+            
+            elif (row ==1) & (col == 8):
+                axes[row][col].yaxis.tick_right()
+                axes[row][col].set_yticks(y_axis_arcsec,arcsec_labels,rotation=45)
+                axes[row][col].set_xticks([])
+            
             else:
                 axes[row][col].set_yticks([])
                 axes[row][col].set_xticks([])
