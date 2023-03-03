@@ -1,5 +1,5 @@
 from scripts.query import Query
-from scripts.coron import CoronPipeline
+from scripts.coron_pipeline import CoronPipeline
 
 
 def test_query():
@@ -13,7 +13,7 @@ def test_query():
                 'date_obs_mjd': ['2022-01-01','2022-12-01'],
                 }
 
-    proposal_id: str = '1386'
+    proposal_id: str = '1441'
 
     psgd: PSGD = ['RATEINTS', 'ASN']
 
@@ -27,7 +27,7 @@ def test_query():
 def test_coron_pipeline():
 
     instrume: INSTRUME = 'NIRCAM'
-    proposal_id: str = '1386'
+    proposal_id: str = '1441'
 
     coron = CoronPipeline(proposal_id=proposal_id, instrume=instrume)
 
