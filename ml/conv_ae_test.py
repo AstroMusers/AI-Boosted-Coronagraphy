@@ -10,7 +10,6 @@ from torch.nn import functional as F
 
 import torchvision
 from torchvision import datasets,transforms
-import torchvision.transforms as transforms
 
 from tqdm.notebook import tqdm
 
