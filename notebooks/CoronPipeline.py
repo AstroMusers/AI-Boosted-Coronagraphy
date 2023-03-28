@@ -11,6 +11,11 @@ from jwst.coron import klip_step
 from jwst.outlier_detection import outlier_detection_step
 from jwst.resample import resample_step
 
+
+
+## This code is from official jwst library 
+## https://github.com/spacetelescope/jwst
+
 __all__ = ['Coron3Pipeline']
 
 

@@ -2,20 +2,12 @@ from astropy.io import fits
 from glob import glob
 import os
 import matplotlib as mpl
-from mpl_toolkits import mplot3d
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import ImageGrid
-from jwst import datamodels
 from itertools import product
 import itertools
 from astropy.wcs import WCS
 import math
-from IPython.display import display
-
-
-
-
 
 
 
@@ -393,17 +385,16 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
             
             if (row == 1) & (col == 0):
 
-                axes[row][col].set_yticks(axis_points,y_labels,rotation=45)
-                axes[row][col].set_xticks(axis_points,x_labels,rotation=70)
+                axes[row][col].set_yticks(axis_points,y_labels)
+                axes[row][col].set_xticks(axis_points,x_labels)
                 axes[row][col].set_xlabel('DEC',fontsize=15,fontweight='bold')
                 axes[row][col].set_ylabel('RA',fontsize=15,fontweight='bold')
             
-            elif (row ==1) & (col == 8):
-                axes[row][col].yaxis.tick_right()
-                axes[row][col].set_yticks(y_axis_arcsec,arcsec_labels,rotation=15)
-                axes[row][col].yaxis.set_label_position("right")
-                axes[row][col].set_ylabel('PIX2ARCSEC',fontsize=15,fontweight='bold')
-                axes[row][col].set_xticks([])
+                #axes[row][col].yaxis.tick_right()
+                #axes[row][col].set_yticks(y_axis_arcsec,arcsec_labels,rotation=15)
+                #axes[row][col].yaxis.set_label_position("right")
+                #axes[row][col].set_ylabel('PIX2ARCSEC',fontsize=15,fontweight='bold')
+                #axes[row][col].set_xticks([])
             
             else:
                 axes[row][col].set_yticks([])
