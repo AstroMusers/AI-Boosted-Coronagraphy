@@ -9,6 +9,8 @@ from visualization_helpers import *
 from random import sample
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.ndimage import gaussian_filter
+from copy import deepcopy
 from tqdm import tqdm
 import h5py
 import copy
@@ -20,6 +22,7 @@ def gaus(x, a, m, s):
 
 
 
+#########################################
 def generate_star_exoplanet(nsample):
     
     xx_s, yy_s = np.meshgrid(np.arange(200), np.arange(200))
@@ -57,7 +60,7 @@ def generate_star_exoplanet(nsample):
     return star_stack,exo_stack
 
 
-
+#########################################
 def generate_datasetSE(nsample):
     
     s,e = generate_star_exoplanet(nsample=nsample)
@@ -86,7 +89,7 @@ def generate_datasetSE(nsample):
     
     return data
 
-
+#########################################
 def generate_star(nsample):
     
     xx_s, yy_s = np.meshgrid(np.arange(200), np.arange(200))
@@ -111,7 +114,7 @@ def generate_star(nsample):
     return star_stack
 
 
-
+#########################################
 def generate_datasetS(nsample):
     
     s = generate_star(nsample=nsample)
@@ -126,6 +129,9 @@ def generate_datasetS(nsample):
     
     return data
     
+    
+    
+
     
 def visualize_syn_data(data,exo_locations):
     _, axes = plt.subplots(nrows=5,ncols=5,figsize=(20,20))
@@ -204,3 +210,86 @@ def put_exo2image(data):
         exo_stack = np.concatenate((exo_stack,sample),axis=0)
         
     return exo_stack
+
+
+
+
+
+#########################################
+def augment(tensor):
+        
+    #### ROTATION
+    #####################################################################
+    angles = [30,45,60,75,90,105,120,135,180,200,210,245,275,310,340]
+    rotated_imgs = [T.RandomRotation(degrees=d)(tensor) for d in angles]
+    
+    rot1 = np.array(rotated_imgs[0])
+    rot2 = np.array(rotated_imgs[1])
+    rotated_stack = np.concatenate((rot1,rot2),axis=0)   
+    
+    for i in range(2,len(rotated_imgs)):
+    
+        rotated_stack = np.concatenate((rotated_stack,np.array(rotated_imgs[i])),axis=0) 
+    #####################################################################
+    
+    
+    
+    
+    #### FLIPPING    
+    #####################################################################
+    flipped_imgs = [T.RandomHorizontalFlip(p=1)(tensor)]
+    #####################################################################
+    
+    
+    
+    #### FLIP + ROTATE
+    #####################################################################
+    flipped_rotated_imgs = [T.RandomRotation(degrees=d)(flipped_imgs[0]) for d in angles]
+    
+    flip_rot1  = np.array(flipped_rotated_imgs[0])
+    flip_rot2  = np.array(flipped_rotated_imgs[1])
+    flipped_rotated_stack = np.concatenate((flip_rot1,flip_rot2),axis=0) 
+    
+    for i in range(2,len(flipped_rotated_imgs)):
+    
+        flipped_rotated_stack = np.concatenate((flipped_rotated_stack,np.array(flipped_rotated_imgs[i])),axis=0) 
+    
+    
+    augmented_data = np.concatenate((rotated_stack,flipped_rotated_stack,flipped_imgs[0]),axis=0)
+    
+    return augmented_data
+
+
+
+
+def add_gaussian_blur(exo,star):
+    
+
+    copy_exo = deepcopy(exo)
+    copy_star = deepcopy(star)
+    
+    
+
+    blurred_exo = gaussian_filter(copy_exo, sigma=0.8)
+    blurred_star = gaussian_filter(copy_star, sigma=1.2)
+    
+    return blurred_exo, blurred_star
+
+
+
+
+
+def add_noise(exo,star):
+    
+    exo_nsample = exo.shape[0]
+    star_nsample = star.shape[0]
+    
+    noise1 = np.random.normal(14,3,(exo_nsample,320,320)) + np.random.exponential(scale=6,size=(exo_nsample,320,320)) + np.squeeze(np.random.dirichlet(alpha=(10,),size=(exo_nsample,320,320)))
+    noise2 = np.random.normal(15,3,(star_nsample,320,320)) + np.random.exponential(scale=6,size=(star_nsample,320,320)) + np.squeeze(np.random.dirichlet(alpha=(10,),size=(star_nsample,320,320)))
+    
+    noised_exo  = exo + noise1
+    noised_star = star + noise2
+    
+    
+    return noised_exo, noised_star
+    

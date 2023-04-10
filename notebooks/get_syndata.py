@@ -22,6 +22,7 @@ import pandas as pd
 filterwarnings('ignore')
 
 
+
 def visualize_data_locations(data,exo_locations):
     _, axes = plt.subplots(nrows=5,ncols=5,figsize=(20,20))
 
