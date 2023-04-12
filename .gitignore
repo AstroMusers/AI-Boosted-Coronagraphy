@@ -2,3 +2,10 @@ dataset/
 .ipynb_checkpoints/
 notebooks/data/
 secrets/
+
+*.log
+*.out
+*.pyc
+*.json
+*.yaml
+*/wandb/
