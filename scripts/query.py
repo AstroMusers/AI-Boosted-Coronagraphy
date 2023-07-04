@@ -3,8 +3,8 @@ from astroquery.mast import Observations
 
 import jwst
 
-from util.util_type import PSGD, List
-from util.util_main import get_mast_token, get_dataset_dir
+from ..util.util_type import PSGD, List
+from ..util.util_main import get_mast_token, get_dataset_dir
 
 
 class Query:
