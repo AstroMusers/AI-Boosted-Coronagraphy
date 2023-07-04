@@ -64,12 +64,12 @@ class MyCoron3Pipeline(Pipeline):
 
         # Store the output file for future use
         self.output_file = input_models.meta.asn_table.products[0].name
-        print('Output:',self.output_file)
+        #print('Output:',self.output_file)
 
         # Find all the member types in the product
         members_by_type = defaultdict(list)
         prod = input_models.meta.asn_table.products[0].instance
-        print('Prod:',prod)
+        #print('Prod:',prod)
 
         for member in prod['members']:
             members_by_type[member['exptype'].lower()].append(member['expname'])
@@ -89,8 +89,8 @@ class MyCoron3Pipeline(Pipeline):
         # Extract lists of all the PSF and science target members
         psf_files = members_by_type['psf']
         targ_files = members_by_type['science']
-        print('PSF:',psf_files)
-        print('TARG:',targ_files)
+        #print('PSF:',psf_files)
+        #print('TARG:',targ_files)
 
         # Make sure we found some PSF and target members
         if len(psf_files) == 0:
@@ -172,9 +172,14 @@ class MyCoron3Pipeline(Pipeline):
 
                 # Split out the integrations into separate models
                 # in a ModelContainer to pass to `resample`
-                for model in psf_sub.to_container():
-                    print('Hello, resampleinputttssssssssssss')
-                    resample_input.append(model)
+
+                try:
+                    for model in psf_sub.to_container():
+                        print('Hello, resampleinputttssssssssssss')
+                        resample_input.append(model)
+
+                except:
+                    print('psf_sub didnt work')
 
         # Call the resample step to combine all psf-subtracted target images
         result = self.resample(resample_input)

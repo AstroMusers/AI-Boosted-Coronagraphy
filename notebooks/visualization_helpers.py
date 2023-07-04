@@ -160,8 +160,8 @@ def pixel2wcs(fits_,ispsf=False):
     file = fits.open(fits_)
     sci = file[1].data
     axs_length = np.max(file[1].data.shape)
-    axis_point = np.arange(5)
-    axis_points = np.round(axis_point * axs_length/4)
+    axis_point = np.arange(3)
+    axis_points = np.round(axis_point * axs_length/2)
     
     if ispsf:
         w = WCS(file[1].header,naxis=2)
@@ -224,7 +224,7 @@ def create_axis_label(times,fixed):
     
     return labels
     
-def create_declination_labels(labelish,fixed=2):
+def create_declination_labels(labelish,fixed=1):
     
     labels = []
     
