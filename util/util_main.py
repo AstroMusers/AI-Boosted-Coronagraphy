@@ -1,5 +1,6 @@
 import os
 
+
 def get_mast_token():
     main_dir = get_main_dir()
     secret_file = open(main_dir + "/secrets/mast_token.txt", "r")
@@ -9,6 +10,7 @@ def get_mast_token():
     del secret_file, main_dir
     return mast_token
 
+
 def get_dataset_dir():
     main_dir = get_main_dir()
     dataset_dir = main_dir + "/dataset"
@@ -16,8 +18,10 @@ def get_dataset_dir():
     del main_dir
     return dataset_dir
 
+
 def get_util_main_dir():
-     return os.path.realpath(__file__)
+    return os.path.realpath(__file__)
+
 
 def get_main_dir():
     current_dir = get_util_main_dir()
@@ -26,6 +30,7 @@ def get_main_dir():
 
     del current_dir
     return main_dir
+
 
 if __name__ == "__main__":
 
