@@ -2,9 +2,11 @@ dataset/
 .ipynb_checkpoints/
 notebooks/data/
 secrets/
+*/__pycache__
 
-*.log
-*.out
+
+rule*.py
+*.csv
 *.pyc
 *.json
 *.yaml
@@ -12,5 +14,6 @@ secrets/
 */*.txt
 *.pyc
 *.csv
-
-*/__pycache__
+*.fits
+*.png
+*.out

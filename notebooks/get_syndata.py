@@ -48,7 +48,7 @@ def visualize_data_locations(data,exo_locations):
     
     
     
-def visualize_data(data):
+def visualize_data(data,save=False):
     _, axes = plt.subplots(nrows=5,ncols=5,figsize=(20,20))
 
     for i, (row,col) in enumerate(product(range(5),range(5))):
@@ -57,8 +57,10 @@ def visualize_data(data):
         axes[row][col].set_yticks([])
         axes[row][col].set_xticks([])
         
-    _.patch.set_facecolor('#423f3b')
+    #_.patch.set_facecolor('#423f3b')
     plt.subplots_adjust(wspace=0,hspace=0)
+    if save:
+        plt.savefig(f'SYN_DATA_GAUSSIAN_PSF.png', dpi=300,bbox_inches='tight',pad_inches=0);
     plt.show()  
     
         
@@ -101,7 +103,7 @@ def label_data(arr:np.ndarray,label:str):
 def get_train_test():
     
 
-    DIR = '/home/sarperyn/sarperyurtseven/ProjectFiles/dataset/'
+    DIR = '/home/sarperyn/sarperyurtseven/ProjectFiles/dataset'
     h5_files = glob(os.path.join(DIR,'NIRCAM/**/*.h5'))
     data_1441 = h5py.File(h5_files[0],'r')
     data_1386 = h5py.File(h5_files[1],'r')
@@ -113,13 +115,13 @@ def get_train_test():
         final_1386 = np.concatenate((final_1386,np.array(data_1386[keys_1386[i+2]])))
 
 
-    augmented_1386   = np.load(f'{DIR}/augmented/augmented.npy')
+    augmented_1386   = np.load(f'{DIR}/augmented/augmented_1386.npy')
     #augmented_erased = np.load(f'{DIR}/augmented/augmented_erased_data.npy')
-    blurred_exo      = np.load(f'{DIR}/augmented/blurred_exo.npy')
-    blurred_star     = np.load(f'{DIR}/augmented/blurred_star.npy')
+    #blurred_exo      = np.load(f'{DIR}/augmented/blurred_exo.npy')
+    #blurred_star     = np.load(f'{DIR}/augmented/blurred_star.npy')
     #blurred_nothing  = np.load(f'{DIR}/augmented/blurred_nothing.npy')
-    noised_exo       = np.load(f'{DIR}/augmented/noised_exo.npy')
-    noised_star      = np.load(f'{DIR}/augmented/noised_star.npy')
+    noised_exo       = np.load(f'{DIR}/augmented/noised_exo_1386.npy')
+    noised_star      = np.load(f'{DIR}/augmented/noised_star_1386.npy')
 
 
     exo_f250m = np.concatenate((np.load(f'{DIR}/synthetic/exo1_f250m.npy'),np.load(f'{DIR}/synthetic/exo2_f250m.npy')),axis=0)
@@ -128,8 +130,8 @@ def get_train_test():
     exo_f410m = np.concatenate((np.load(f'{DIR}/synthetic/exo1_f410m.npy'),np.load(f'{DIR}/synthetic/exo2_f410m.npy')),axis=0)
     exo_f444w = np.concatenate((np.load(f'{DIR}/synthetic/exo1_f444w.npy'),np.load(f'{DIR}/synthetic/exo2_f444w.npy')),axis=0)
 
-    exo     = np.concatenate((exo_f250m,exo_f300m,exo_f356w,exo_f410m,noised_exo,blurred_exo,exo_f444w),axis=0)
-    star    = np.concatenate((final_1386,augmented_1386,noised_star),axis=0)
+    exo     = np.concatenate((exo_f250m,exo_f300m,exo_f356w,exo_f410m,exo_f444w),axis=0)
+    star    = np.concatenate((final_1386,augmented_1386),axis=0)
     
     print('Exo data:',exo.shape)
     print('Star data:',star.shape)

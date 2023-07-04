@@ -277,8 +277,6 @@ def add_gaussian_blur(exo,star):
 
 
 
-
-
 def add_noise(exo,star):
     
     exo_nsample = exo.shape[0]
