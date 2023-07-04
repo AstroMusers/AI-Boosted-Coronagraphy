@@ -1,18 +1,27 @@
 dataset/
-*/dataset/
-notebooks/data/
-
-secrets/
-
-notebooks/models/
-
-__pycache__/
-*/__pycache__/
 
 */.ipynb_checkpoints/
 .ipynb_checkpoints
 
 */wandb/
 
+notebooks/data/
+notebooks/models/
+secrets/
+
+*/__pycache__
+__pycache__/
+
+
+rule*.py
 *.csv
+*.pyc
+*.json
+*.yaml
+*/wandb/
+*/*.txt
+*.pyc
+*.csv
+*.fits
+*.png
 *.out

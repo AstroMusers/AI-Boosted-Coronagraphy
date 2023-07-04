@@ -2,16 +2,13 @@ from astropy.io import fits
 from glob import glob
 import os
 import matplotlib as mpl
-from mpl_toolkits import mplot3d
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.axes_grid1 import ImageGrid
-from jwst import datamodels
 from itertools import product
 import itertools
 from astropy.wcs import WCS
 import math
-from IPython.display import display
+
 
 
 
@@ -21,7 +18,6 @@ def get_lower_products(suffix,directory):
 
 def get_stage3_products(suffix,directory):
     return glob(os.path.join(directory, f'*{suffix}.fits'))
-
 
 
 def plot_psfaligns(psfaligns,title,w,filtrs,detectors,axis_points):
@@ -62,6 +58,7 @@ def plot_psfaligns(psfaligns,title,w,filtrs,detectors,axis_points):
                     axes[row][col].set_xticks(axis_points,x_labels,rotation=70)
                     axes[row][col].set_xlabel('DEC',fontsize=15,fontweight='bold')
                     axes[row][col].set_ylabel('RA',fontsize=15,fontweight='bold')
+                    
                     
                 else:
                     axes[row][col].set_yticks([])
@@ -163,8 +160,8 @@ def pixel2wcs(fits_,ispsf=False):
     file = fits.open(fits_)
     sci = file[1].data
     axs_length = np.max(file[1].data.shape)
-    axis_point = np.arange(5)
-    axis_points = np.round(axis_point * axs_length/4)
+    axis_point = np.arange(3)
+    axis_points = np.round(axis_point * axs_length/2)
     
     if ispsf:
         w = WCS(file[1].header,naxis=2)
@@ -227,7 +224,7 @@ def create_axis_label(times,fixed):
     
     return labels
     
-def create_declination_labels(labelish,fixed=2):
+def create_declination_labels(labelish,fixed=1):
     
     labels = []
     
@@ -265,6 +262,38 @@ def check_hdu_dims(file,hdu:int):
         
         
     return dims
+
+def pixel_to_arcsec_nircam(axis_length,wavelength):
+    
+    short_wavelengths = ['F070W', 'F090W', 'F115W', 'F140M', 'F150W', 'F162M', 'F164N', 'F150W2', 'F182M', 'F187N', 'F200W', 'F210M', 'F212N']
+
+    long_wavelengths = ['F250M', 'F277W', 'F300M', 'F322W2', 'F323N', 'F335M', 'F356W', 'F360M', 'F405N', 'F410M', 'F430M', 'F444W', 'F460M', 'F466N', 'F470N', 'F480M']
+    
+    if wavelength in short_wavelengths:
+        x = 1 / 0.031 
+    
+    elif wavelength in long_wavelengths:
+        x = 1 / 0.063
+
+    else:
+        raise ValueError('Wavelength not found!')
+    
+    zero_point = axis_length / 2
+    pos_current_point = zero_point
+    neg_current_point = zero_point
+    
+    arcsec_axis_points = [zero_point]
+
+    while (pos_current_point + x) < axis_length:
+        pos_current_point += x
+        neg_current_point -= x
+        #print(pos_current_point)
+        arcsec_axis_points.append(pos_current_point)
+        arcsec_axis_points.append(neg_current_point)
+    
+    
+    
+    return arcsec_axis_points
 
 
 
@@ -333,7 +362,6 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
     x_labelish = [str(round(x_label,3)) for x_label in w[1]]
     x_labels = create_declination_labels(x_labelish)
     
-    
     for data in range(len(psfstack)):
         
         
@@ -341,8 +369,18 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
             _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(36,8))
         
         elif instrume[data] == 'MIRI':
-            _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(46,8))
+            _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(28,8))
         
+        y_axis_arcsec = [ y for y in np.sort(pixel_to_arcsec_nircam(320,wavelength=filtrs[data]))]
+        
+        negative = [-x for x in range((len(y_axis_arcsec)//2)+1)]
+        positive = [ x for x in range((len(y_axis_arcsec)//2)+1)]
+        arcsec_labels = negative + positive
+        arcsec_labels = arcsec_labels[1:]
+        arcsec_labels.sort()
+        
+        #print(y_axis_arcsec)
+        #print(type(y_axis_arcsec))
 
         for psf,(row,col) in enumerate(itertools.product(range(nrow),range(ncol))):
             
@@ -351,10 +389,18 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
             
             
             if (row == 1) & (col == 0):
-                axes[row][col].set_yticks(axis_points,y_labels,rotation=45)
-                axes[row][col].set_xticks(axis_points,x_labels,rotation=70)
+
+                axes[row][col].set_yticks(axis_points,y_labels)
+                axes[row][col].set_xticks(axis_points,x_labels)
                 axes[row][col].set_xlabel('DEC',fontsize=15,fontweight='bold')
                 axes[row][col].set_ylabel('RA',fontsize=15,fontweight='bold')
+            
+                #axes[row][col].yaxis.tick_right()
+                #axes[row][col].set_yticks(y_axis_arcsec,arcsec_labels,rotation=15)
+                #axes[row][col].yaxis.set_label_position("right")
+                #axes[row][col].set_ylabel('PIX2ARCSEC',fontsize=15,fontweight='bold')
+                #axes[row][col].set_xticks([])
+            
             else:
                 axes[row][col].set_yticks([])
                 axes[row][col].set_xticks([])
@@ -417,7 +463,7 @@ def plot_psfaligns(psfaligns,title,w,filtrs,instrume,program,targprop,axis_point
     x_labels = create_declination_labels(x_labelish)
     
     
-    for data in range(len(psfaligns)//2):
+    for data in range(len(psfaligns)):
         
         nints = psfaligns[data].shape[0]
         npsfs = psfaligns[data].shape[1]
