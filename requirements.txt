@@ -1,5 +1,11 @@
-jwst
+glob
+json
+pandas
+matplotlib
 astropy
 jdaviz
 webbpsf
 pysynphot
+astroquery
+jwst
+opencv-python

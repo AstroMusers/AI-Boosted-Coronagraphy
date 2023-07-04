@@ -1,8 +1,16 @@
 dataset/
-.ipynb_checkpoints/
+
+*/.ipynb_checkpoints/
+.ipynb_checkpoints
+
+*/wandb/
+
 notebooks/data/
+notebooks/models/
 secrets/
+
 */__pycache__
+__pycache__/
 
 
 rule*.py
