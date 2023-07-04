@@ -2,11 +2,18 @@ dataset/
 .ipynb_checkpoints/
 notebooks/data/
 secrets/
+*/__pycache__
 
 
 rule*.py
 *.csv
 *.pyc
+*.json
+*.yaml
+*/wandb/
+*/*.txt
+*.pyc
+*.csv
 *.fits
-*Copy*.ipynb
 *.png
+*.out

@@ -265,13 +265,18 @@ def check_hdu_dims(file,hdu:int):
 
 def pixel_to_arcsec_nircam(axis_length,wavelength):
     
-    short_wavelengths = ['F187N','F212N','F182M','F210M','F200W']
+    short_wavelengths = ['F070W', 'F090W', 'F115W', 'F140M', 'F150W', 'F162M', 'F164N', 'F150W2', 'F182M', 'F187N', 'F200W', 'F210M', 'F212N']
+
+    long_wavelengths = ['F250M', 'F277W', 'F300M', 'F322W2', 'F323N', 'F335M', 'F356W', 'F360M', 'F405N', 'F410M', 'F430M', 'F444W', 'F460M', 'F466N', 'F470N', 'F480M']
     
     if wavelength in short_wavelengths:
         x = 1 / 0.031 
     
-    else:
+    elif wavelength in long_wavelengths:
         x = 1 / 0.063
+
+    else:
+        raise ValueError('Wavelength not found!')
     
     zero_point = axis_length / 2
     pos_current_point = zero_point
@@ -458,7 +463,7 @@ def plot_psfaligns(psfaligns,title,w,filtrs,instrume,program,targprop,axis_point
     x_labels = create_declination_labels(x_labelish)
     
     
-    for data in range(len(psfaligns)//2):
+    for data in range(len(psfaligns)):
         
         nints = psfaligns[data].shape[0]
         npsfs = psfaligns[data].shape[1]
