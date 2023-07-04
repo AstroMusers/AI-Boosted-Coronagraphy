@@ -1,7 +1,18 @@
 dataset/
-.ipynb_checkpoints/
+*/dataset/
 notebooks/data/
-secrets/
-scripts/__pycache__/
-utils/__pycache__/
 
+secrets/
+
+notebooks/models/
+
+__pycache__/
+*/__pycache__/
+
+*/.ipynb_checkpoints/
+.ipynb_checkpoints
+
+*/wandb/
+
+*.csv
+*.out

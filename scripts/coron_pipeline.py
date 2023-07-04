@@ -15,9 +15,11 @@ from jwst.associations import AssociationPool, AssociationRegistry
 from jwst.associations.mkpool import from_cmdline, mkpool
 from jwst.associations import generate
 
+main_dir = '/'.join(os.path.realpath(__file__).split('/')[:-2])
+sys.path.insert(0, main_dir + '/scripts')
+
 from refactored_coron3_pipeline import RefactoredCoron3Pipeline 
 
-main_dir = '/'.join(os.path.realpath(__file__).split('/')[:-2])
 sys.path.insert(0, main_dir + '/util')
 
 from util_type import INSTRUME
@@ -36,7 +38,7 @@ class CoronPipeline():
         self.dataset_dir = self.dataset_dir + f'/{self.instrume}/{self.proposal_id}/mastDownload/JWST/'
 
 
-    
+
     def pipeline_stage2(self, rateints_check: bool = False):
 
         self.detector = 'nrcalong'
