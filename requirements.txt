@@ -1,3 +1,5 @@
 jwst
 astropy
 jdaviz
+webbpsf
+pysynphot

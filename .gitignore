@@ -9,3 +9,8 @@ secrets/
 *.json
 *.yaml
 */wandb/
+*/*.txt
+*.pyc
+*.csv
+
+*/__pycache__

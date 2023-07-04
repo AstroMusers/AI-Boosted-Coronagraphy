@@ -31,5 +31,4 @@ if __name__ == "__main__":
 
     # Tests
     get_mast_token()
-    get_download_dir()
     get_main_dir()
