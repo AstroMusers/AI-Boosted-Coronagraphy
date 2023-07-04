@@ -1,20 +1,9 @@
-import os
-import glob
-import json
-import sys
-
-import pandas as pd
-import matplotlib.pyplot as plt
-
-from astropy.io import fits
 from astropy.table import unique, vstack
-from astropy.table import Table
-from astropy.time import Time
-from astroquery.mast import Mast,Observations
+from astroquery.mast import Observations
 
 import jwst
 
-from util.util_type import SERVICE, query_keywords, mast_request_params, PSGD, List
+from util.util_type import PSGD, List
 from util.util_main import get_mast_token, get_dataset_dir
 
 
