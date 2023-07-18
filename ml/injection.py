@@ -64,9 +64,8 @@ class Injection():
             
 
     def __injection(self, psf, generated_psf, max_pixel_distance:int, min_pixel_distance:int, filter_key:str, injection_count:int=10, flux_coefficients:list=[1, 2, 5, 10, 100, 1000, 10000]):
-        # Function is broken. It needs to be fixed. At value of 160 the exoplanet and the star are not seperated.
-        # Max should be max - shape/2 and there should be a sign generator to determine the left or right side of the image.
-                
+        dataset_dir = get_dataset_dir()
+
         for flux_coefficient in flux_coefficients:
             for _ in range(injection_count):
                 if max_pixel_distance > psf.shape[0]:
@@ -79,25 +78,27 @@ class Injection():
                 else:
                     max_y = max_pixel_distance
 
-                random_x = np.random.randint(min_pixel_distance, max_x)
-                random_y = np.random.randint(min_pixel_distance, max_y)
+                random_x = np.random.randint(min_pixel_distance, np.floor(max_x - (psf.shape[0]/2)))
+                random_y = np.random.randint(min_pixel_distance, np.floor(max_y - (psf.shape[1]/2)))
+
+                rand_sign_x = 1 if np.random.rand() < 0.5 else -1
+                rand_sign_y = 1 if np.random.rand() < 0.5 else -1
 
                 temp_psf = generated_psf * (np.max(psf) / ( flux_coefficient * np.max(generated_psf)))
 
                 injected = temp_psf[
-                    psf.shape[0]-random_x : (psf.shape[0] * 2) - random_x,
-                    psf.shape[1]-random_y : (psf.shape[1] * 2) - random_y
-                ] + psf
+                    int((psf.shape[0]/2) - (random_x * rand_sign_x)): int((3*psf.shape[0]/2) - (random_x * rand_sign_x)),
+                    int((psf.shape[1]/2) - (random_y * rand_sign_y)): int((3*psf.shape[1]/2) - (random_y * rand_sign_y))
+                ]
+                
+                filename = f'{dataset_dir}/PSF_INJECTION/{filter_key}-x{random_x}-y{random_y}-fc{flux_coefficient}.png'
 
-                filename = f'{filter_key}-x{random_x}-y{random_y}-fc{flux_coefficient}.png'
-
-                plt.imsave(filename=filename, arr=injected, cmap='gray')
+                plt.imsave(fname=filename, arr=injected, cmap='gray')
         
         del temp_psf, injected, max_x, max_y, random_x, random_y, filename, flux_coefficients
 
     def __nan_elimination(self, psf):
         return np.nan_to_num(psf)
-
 
     def __generate_psf_model(self, detector:str, filter:str, fov:float, save:bool=True):
         
@@ -112,6 +113,7 @@ class Injection():
         if psf_dir_glob != []:
             generated_psf = fits.open(psf_dir)
             print(f'{detector}-{filter} PSF with {fov} arcsec fov collected from cache.')
+            del psf_dir, psf_dir_glob
         else:
             if 'NRC' in detector:
                 wpsf = webbpsf.NIRCam()
@@ -131,8 +133,8 @@ class Injection():
             time_end = time()
 
             print(f'{detector}-{filter} PSF generated respect to {fov} arcsec fov in {np.round(time_end-time_start, 2)} seconds.')
+            del psf_dir, psf_dir_glob, wpsf, time_start, time_end
 
-        del psf_dir, psf_dir_glob, wpsf, time_start, time_end
         return generated_psf
         
     def __create_psfstacks_dict(self) -> None:
@@ -187,4 +189,7 @@ if __name__ == '__main__':
 
     injection = Injection(psf_directory=psf_directory)
 
-    injection.apply_injection(injection_count=10)
+    injection_count = 10
+    flux_coefficients = [1, 2, 5, 10, 100, 1000, 10000]
+
+    injection.apply_injection(injection_count=injection_count, flux_coefficients=flux_coefficients)
