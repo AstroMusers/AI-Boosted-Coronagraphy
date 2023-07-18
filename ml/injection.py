@@ -40,7 +40,7 @@ class Injection():
         self.psfstacks = {}
         self.__create_psfstacks_dict()
 
-    def apply_injection(self, injection_count:int=10):
+    def apply_injection(self, injection_count:int=10, flux_coefficients = [1, 2, 5, 10, 100, 1000, 10000]):
 
         for filter_key in self.psfstacks.keys():
             max_pixel_distance, min_pixel_distance = self.__get_max_min_pixel_distance(
@@ -60,35 +60,40 @@ class Injection():
             
             for _, psf in enumerate(self.psfstacks[filter_key][1].data):
                 psf = self.__nan_elimination(psf)
-                self.__injection(psf, generated_psf[generated_psf_selection].data, max_pixel_distance, min_pixel_distance, filename=filter_key, injection_count=injection_count)
+                self.__injection(psf, generated_psf[generated_psf_selection].data, max_pixel_distance, min_pixel_distance, filter_key=filter_key, injection_count=injection_count, flux_coefficients=flux_coefficients)
             
 
-    def __injection(self, psf, generated_psf, max_pixel_distance:int, min_pixel_distance:int, filename:str, injection_count:int=10):
+    def __injection(self, psf, generated_psf, max_pixel_distance:int, min_pixel_distance:int, filter_key:str, injection_count:int=10, flux_coefficients:list=[1, 2, 5, 10, 100, 1000, 10000]):
         # Function is broken. It needs to be fixed. At value of 160 the exoplanet and the star are not seperated.
         # Max should be max - shape/2 and there should be a sign generator to determine the left or right side of the image.
-        # Also, there should be a flux controller that controls the flux of the exoplanet according to the star.
-        for idx in range(injection_count):
-            if max_pixel_distance > psf.shape[0]:
-                max_x = psf.shape[0]
-            else:
-                max_x = max_pixel_distance
-            
-            if max_pixel_distance > psf.shape[1]:
-                max_y = psf.shape[1]
-            else:
-                max_y = max_pixel_distance
+                
+        for flux_coefficient in flux_coefficients:
+            for _ in range(injection_count):
+                if max_pixel_distance > psf.shape[0]:
+                    max_x = psf.shape[0]
+                else:
+                    max_x = max_pixel_distance
+                
+                if max_pixel_distance > psf.shape[1]:
+                    max_y = psf.shape[1]
+                else:
+                    max_y = max_pixel_distance
 
-            random_x = np.random.randint(min_pixel_distance, max_x)
-            random_y = np.random.randint(min_pixel_distance, max_y)
+                random_x = np.random.randint(min_pixel_distance, max_x)
+                random_y = np.random.randint(min_pixel_distance, max_y)
 
-            injected = generated_psf[
-                psf.shape[0]-random_x : (psf.shape[0] * 2) - random_x,
-                psf.shape[1]-random_y : (psf.shape[1] * 2) - random_y
-            ] + psf
+                temp_psf = generated_psf * (np.max(psf) / ( flux_coefficient * np.max(generated_psf)))
 
-            filename = f'{filename}-{random_x}-{random_y}.png'
+                injected = temp_psf[
+                    psf.shape[0]-random_x : (psf.shape[0] * 2) - random_x,
+                    psf.shape[1]-random_y : (psf.shape[1] * 2) - random_y
+                ] + psf
 
-            plt.imsave(filename=filename, arr=injected, cmap='gray')
+                filename = f'{filter_key}-x{random_x}-y{random_y}-fc{flux_coefficient}.png'
+
+                plt.imsave(filename=filename, arr=injected, cmap='gray')
+        
+        del temp_psf, injected, max_x, max_y, random_x, random_y, filename, flux_coefficients
 
     def __nan_elimination(self, psf):
         return np.nan_to_num(psf)
