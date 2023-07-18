@@ -40,7 +40,7 @@ class Injection():
         self.psfstacks = {}
         self.__create_psfstacks_dict()
 
-    def apply_injection(self):
+    def apply_injection(self, injection_count:int=10):
 
         for filter_key in self.psfstacks.keys():
             max_pixel_distance, min_pixel_distance = self.__get_max_min_pixel_distance(
@@ -51,9 +51,50 @@ class Injection():
             detector = self.psfstacks[filter_key][0].header['DETECTOR']
             filter = self.psfstacks[filter_key][0].header['FILTER']
 
-            self.__generate_psf_model(detector=detector, filter=filter, fov=fov*2)
+            generated_psf = self.__generate_psf_model(detector=detector, filter=filter, fov=fov*2, save=True)
 
-    def __generate_psf_model(self, detector:str, filter:str, fov:float):
+            if self.psfstacks[filter_key][0].header['CHANNEL'] == 'LONG':
+                generated_psf_selection = 1
+            else:
+                generated_psf_selection = 0
+            
+            for _, psf in enumerate(self.psfstacks[filter_key][1].data):
+                psf = self.__nan_elimination(psf)
+                self.__injection(psf, generated_psf[generated_psf_selection].data, max_pixel_distance, min_pixel_distance, filename=filter_key, injection_count=injection_count)
+            
+
+    def __injection(self, psf, generated_psf, max_pixel_distance:int, min_pixel_distance:int, filename:str, injection_count:int=10):
+        # Function is broken. It needs to be fixed. At value of 160 the exoplanet and the star are not seperated.
+        # Max should be max - shape/2 and there should be a sign generator to determine the left or right side of the image.
+        # Also, there should be a flux controller that controls the flux of the exoplanet according to the star.
+        for idx in range(injection_count):
+            if max_pixel_distance > psf.shape[0]:
+                max_x = psf.shape[0]
+            else:
+                max_x = max_pixel_distance
+            
+            if max_pixel_distance > psf.shape[1]:
+                max_y = psf.shape[1]
+            else:
+                max_y = max_pixel_distance
+
+            random_x = np.random.randint(min_pixel_distance, max_x)
+            random_y = np.random.randint(min_pixel_distance, max_y)
+
+            injected = generated_psf[
+                psf.shape[0]-random_x : (psf.shape[0] * 2) - random_x,
+                psf.shape[1]-random_y : (psf.shape[1] * 2) - random_y
+            ] + psf
+
+            filename = f'{filename}-{random_x}-{random_y}.png'
+
+            plt.imsave(filename=filename, arr=injected, cmap='gray')
+
+    def __nan_elimination(self, psf):
+        return np.nan_to_num(psf)
+
+
+    def __generate_psf_model(self, detector:str, filter:str, fov:float, save:bool=True):
         
         if detector == 'NRCALONG':
             detector = 'NRCA5'
@@ -64,7 +105,7 @@ class Injection():
         psf_dir_glob = glob(psf_dir)
 
         if psf_dir_glob != []:
-            psf = fits.open(psf_dir)
+            generated_psf = fits.open(psf_dir)
             print(f'{detector}-{filter} PSF with {fov} arcsec fov collected from cache.')
         else:
             if 'NRC' in detector:
@@ -78,16 +119,17 @@ class Injection():
             wpsf.detector = detector
             wpsf.filter = filter
 
-            psf = wpsf.calc_psf(fov_arcsec=fov, oversample=2, outfile=f'{psf_dir}')
+            if save:
+                generated_psf = wpsf.calc_psf(fov_arcsec=fov, oversample=2, outfile=f'{psf_dir}')
+            else:
+                generated_psf = wpsf.calc_psf(fov_arcsec=fov, oversample=2)
             time_end = time()
 
             print(f'{detector}-{filter} PSF generated respect to {fov} arcsec fov in {np.round(time_end-time_start, 2)} seconds.')
 
-        return psf
+        del psf_dir, psf_dir_glob, wpsf, time_start, time_end
+        return generated_psf
         
-        
-
-
     def __create_psfstacks_dict(self) -> None:
         for _, dir in enumerate(self.psfstacks_nircam_dirs):
             fits_name = get_filename_from_dir(dir)
@@ -140,4 +182,4 @@ if __name__ == '__main__':
 
     injection = Injection(psf_directory=psf_directory)
 
-    injection.apply_injection()
+    injection.apply_injection(injection_count=10)
