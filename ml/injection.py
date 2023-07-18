@@ -62,7 +62,6 @@ class Injection():
                 psf = self.__nan_elimination(psf)
                 self.__injection(psf, generated_psf[generated_psf_selection].data, max_pixel_distance, min_pixel_distance, filter_key=filter_key, injection_count=injection_count, flux_coefficients=flux_coefficients)
             
-
     def __injection(self, psf, generated_psf, max_pixel_distance:int, min_pixel_distance:int, filter_key:str, injection_count:int=10, flux_coefficients:list=[1, 2, 5, 10, 100, 1000, 10000]):
         dataset_dir = get_dataset_dir()
 
