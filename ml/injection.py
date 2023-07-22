@@ -65,37 +65,40 @@ class Injection():
     def __injection(self, psf, generated_psf, max_pixel_distance:int, min_pixel_distance:int, filter_key:str, injection_count:int=10, flux_coefficients:list=[1, 2, 5, 10, 100, 1000, 10000]):
         dataset_dir = get_dataset_dir()
 
-        for flux_coefficient in flux_coefficients:
-            for _ in range(injection_count):
-                if max_pixel_distance > psf.shape[0]:
-                    max_x = psf.shape[0]
-                else:
-                    max_x = max_pixel_distance
+        for _ in range(injection_count):
+            if max_pixel_distance > psf.shape[0]:
+                max_x = psf.shape[0]
+            else:
+                max_x = max_pixel_distance
                 
-                if max_pixel_distance > psf.shape[1]:
-                    max_y = psf.shape[1]
-                else:
-                    max_y = max_pixel_distance
+            if max_pixel_distance > psf.shape[1]:
+                max_y = psf.shape[1]
+            else:
+                max_y = max_pixel_distance
 
-                random_x = np.random.randint(min_pixel_distance, np.floor(max_x - (psf.shape[0]/2)))
-                random_y = np.random.randint(min_pixel_distance, np.floor(max_y - (psf.shape[1]/2)))
+            random_x = np.random.randint(min_pixel_distance, np.floor(max_x - (psf.shape[0]/2)))
+            random_y = np.random.randint(min_pixel_distance, np.floor(max_y - (psf.shape[1]/2)))
 
-                rand_sign_x = 1 if np.random.rand() < 0.5 else -1
-                rand_sign_y = 1 if np.random.rand() < 0.5 else -1
+            rand_sign_x = 1 if np.random.rand() < 0.5 else -1
+            rand_sign_y = 1 if np.random.rand() < 0.5 else -1
 
-                temp_psf = generated_psf * (np.max(psf) / ( flux_coefficient * np.max(generated_psf)))
+            x = int((psf.shape[0]/2) + rand_sign_x*random_x)
+            y = int((psf.shape[1]/2) + rand_sign_y*random_y)
+            
+            for flux_coefficient in flux_coefficients:
+                temp_psf = np.copy(generated_psf * (np.max(psf) / ( flux_coefficient * np.max(generated_psf))))
 
-                injected = temp_psf[
-                    int((psf.shape[0]/2) - (random_x * rand_sign_x)): int((3*psf.shape[0]/2) - (random_x * rand_sign_x)),
-                    int((psf.shape[1]/2) - (random_y * rand_sign_y)): int((3*psf.shape[1]/2) - (random_y * rand_sign_y))
-                ]
-                
-                filename = f'{dataset_dir}/PSF_INJECTION/{filter_key}-x{random_x}-y{random_y}-fc{flux_coefficient}.png'
+                injected = np.copy(temp_psf[
+                    int(temp_psf.shape[0]/2 - x): int(temp_psf.shape[0]/2 - x + psf.shape[0]),
+                    int(temp_psf.shape[1]/2 - y): int(temp_psf.shape[1]/2 - y + psf.shape[1])
+                ] + psf)
+                                    
+                filename = f'{dataset_dir}/PSF_INJECTION/{filter_key}-x{x}-y{y}-fc{flux_coefficient}.png'
 
                 plt.imsave(fname=filename, arr=injected, cmap='gray')
         
-        del temp_psf, injected, max_x, max_y, random_x, random_y, filename, flux_coefficients
-
+        del temp_psf, injected, max_x, max_y, random_x, random_y, x, y, filename
+        
     def __nan_elimination(self, psf):
         return np.nan_to_num(psf)
 
