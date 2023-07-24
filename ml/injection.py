@@ -60,7 +60,10 @@ class Injection():
             
             for _, psf in enumerate(self.psfstacks[filter_key][1].data):
                 psf = self.__nan_elimination(psf)
-                self.__injection(psf, generated_psf[generated_psf_selection].data, max_pixel_distance, min_pixel_distance, filter_key=filter_key, injection_count=injection_count, flux_coefficients=flux_coefficients)
+                if self.__is_psf_empty(psf):
+                    self.__injection(psf, generated_psf[generated_psf_selection].data, max_pixel_distance, min_pixel_distance, filter_key=filter_key, injection_count=injection_count, flux_coefficients=flux_coefficients)
+                else:
+                    pass
             
     def __injection(self, psf, generated_psf, max_pixel_distance:int, min_pixel_distance:int, filter_key:str, injection_count:int=10, flux_coefficients:list=[1, 2, 5, 10, 100, 1000, 10000]):
         dataset_dir = get_dataset_dir()
@@ -181,6 +184,21 @@ class Injection():
 
         del ra, dec, u_ra, u_dec, coord, width, height, query_results, min_idx, target_star, distance, query_exoplanets, exoplanet_extremes, one_pix_side_length_arcsec
         return np.floor(max_pixel_distance.value), np.floor(min_pixel_distance.value) + 1
+    
+    def __is_psf_empty(self, psf):
+        width, height = psf.shape[0], psf.shape[1]
+        psd = self.__create_psd(psf)
+        if psd[int(width/2) -1][int(height/2) -1] < 0.8:
+            return True
+        else:
+            return False
+
+    def __create_psd(self, psf):
+        psd = np.abs(np.fft.fftshift(np.fft.fft2(psf)))**2
+        psd = np.log10(psd)
+        psd = psd/psd.max()
+        return psd
+    
 
 
 if __name__ == '__main__':
