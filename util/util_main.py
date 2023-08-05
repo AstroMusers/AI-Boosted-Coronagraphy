@@ -15,6 +15,7 @@ def get_dataset_dir():
     main_dir = get_main_dir()
     dataset_dir = main_dir + "/dataset"
 
+    # refactor needed.
     dataset_dir = '/data/scratch/bariskurtkaya/dataset'
 
     del main_dir

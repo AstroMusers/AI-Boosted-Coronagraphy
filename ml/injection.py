@@ -58,14 +58,14 @@ class Injection():
             else:
                 generated_psf_selection = 0
             
-            for _, psf in enumerate(self.psfstacks[filter_key][1].data):
+            for idx, psf in enumerate(self.psfstacks[filter_key][1].data):
                 psf = self.__nan_elimination(psf)
-                if self.__is_psf_empty(psf):
-                    self.__injection(psf, generated_psf[generated_psf_selection].data, max_pixel_distance, min_pixel_distance, filter_key=filter_key, injection_count=injection_count, flux_coefficients=flux_coefficients)
+                if not self.__is_psf_empty(psf):
+                    self.__injection(idx, psf, generated_psf[generated_psf_selection].data, max_pixel_distance, min_pixel_distance, filter_key=filter_key, injection_count=injection_count, flux_coefficients=flux_coefficients)
                 else:
                     pass
             
-    def __injection(self, psf, generated_psf, max_pixel_distance:int, min_pixel_distance:int, filter_key:str, injection_count:int=10, flux_coefficients:list=[1, 2, 5, 10, 100, 1000, 10000]):
+    def __injection(self, idx, psf, generated_psf, max_pixel_distance:int, min_pixel_distance:int, filter_key:str, injection_count:int=10, flux_coefficients:list=[1, 2, 5, 10, 100, 1000, 10000]):
         dataset_dir = get_dataset_dir()
 
         for _ in range(injection_count):
@@ -96,7 +96,7 @@ class Injection():
                     int(temp_psf.shape[1]/2 - y): int(temp_psf.shape[1]/2 - y + psf.shape[1])
                 ] + psf)
                                     
-                filename = f'{dataset_dir}/PSF_INJECTION/{filter_key}-x{x}-y{y}-fc{flux_coefficient}.png'
+                filename = f'{dataset_dir}/PSF_INJECTION/{filter_key}-psf{idx}-x{x}-y{y}-fc{flux_coefficient}.png'
 
                 plt.imsave(fname=filename, arr=injected, cmap='gray')
         
@@ -188,7 +188,7 @@ class Injection():
     def __is_psf_empty(self, psf):
         width, height = psf.shape[0], psf.shape[1]
         psd = self.__create_psd(psf)
-        if psd[int(width/2) -1][int(height/2) -1] < 0.8:
+        if psd[int(width/2) -1][int(height/2) -1] < 0.85:
             return True
         else:
             return False
