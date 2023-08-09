@@ -258,36 +258,3 @@ def augment(tensor):
     augmented_data = np.concatenate((rotated_stack,flipped_rotated_stack,flipped_imgs[0]),axis=0)
     
     return augmented_data
-
-
-
-
-def add_gaussian_blur(exo,star):
-    
-
-    copy_exo = deepcopy(exo)
-    copy_star = deepcopy(star)
-    
-    
-
-    blurred_exo = gaussian_filter(copy_exo, sigma=0.8)
-    blurred_star = gaussian_filter(copy_star, sigma=1.2)
-    
-    return blurred_exo, blurred_star
-
-
-
-def add_noise(exo,star):
-    
-    exo_nsample = exo.shape[0]
-    star_nsample = star.shape[0]
-    
-    noise1 = np.random.normal(14,3,(exo_nsample,320,320)) + np.random.exponential(scale=6,size=(exo_nsample,320,320)) + np.squeeze(np.random.dirichlet(alpha=(10,),size=(exo_nsample,320,320)))
-    noise2 = np.random.normal(15,3,(star_nsample,320,320)) + np.random.exponential(scale=6,size=(star_nsample,320,320)) + np.squeeze(np.random.dirichlet(alpha=(10,),size=(star_nsample,320,320)))
-    
-    noised_exo  = exo + noise1
-    noised_star = star + noise2
-    
-    
-    return noised_exo, noised_star
-    

@@ -15,6 +15,9 @@ def get_dataset_dir():
     main_dir = get_main_dir()
     dataset_dir = main_dir + "/dataset"
 
+    # refactor needed.
+    dataset_dir = '/data/scratch/bariskurtkaya/dataset'
+
     del main_dir
     return dataset_dir
 
@@ -30,6 +33,10 @@ def get_main_dir():
 
     del current_dir
     return main_dir
+
+
+def get_filename_from_dir(fits_dir):
+    return '_'.join(fits_dir.split('/')[-1].split('_')[:-1])
 
 
 if __name__ == "__main__":

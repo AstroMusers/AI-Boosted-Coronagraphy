@@ -192,48 +192,56 @@ class Exonet(nn.Module):
         
 
 
-def train(model,train_dataloader,optimizer,device,loss_fn,EPOCH=150):
+def train(model,train_dataloader,optimizer,device,loss_fn,EPOCH=800):
     
 
-    save_path = os.path.join('/home/sarperyn/sarperyurtseven/ProjectFiles', 'training_results2')
-    with tqdm(total = len(train_dataloader) * EPOCH) as tt:
+    save_path = os.path.join('/home/sarperyn/sarperyurtseven/ProjectFiles', 'training_results3')
+    model_save_path = os.path.join('/home/sarperyn/sarperyurtseven/ProjectFiles', 'models')
+
         
-        model.train()
-        model = model.to(device)
+    model.train()
+    model = model.to(device)
+    
+    for epoch in tqdm(range(EPOCH)):
         
-        for epoch in range(EPOCH):
+        batch_loss = 0
+        
+        for idx, batch in enumerate(train_dataloader):
             
-            batch_loss = 0
+            batch = batch.to(device)
             
-            for idx, batch in enumerate(train_dataloader):
-                
-                batch = batch.to(device)
-                
-                recons = model(batch)
-                
-                loss = loss_fn(recons,batch)
-                
-                optimizer.zero_grad()
-                loss.backward()
-                optimizer.step()
-                
-                batch_loss += loss.item()
-                tt.update()
+            recons = model(batch)
+
+            
+            loss = loss_fn(recons,batch)
+            
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            
+            batch_loss += loss.item()
+
                 
                 
-            batch_loss = batch_loss / idx
-            plot_results(batch, recons, save_path, epoch, idx)
-            if epoch % 10 == 0:
-                torch.save(model, f'model_exp-2_epoch-{epoch}.pt')
+            batch_loss = batch_loss / (idx + 1)
+            
+        
+            if idx % 150 == 0:
+                plot_results(batch, recons, save_path, epoch, idx)
 
             print(f'{batch_loss}')
+
+        if (epoch+1) % 20 == 0:
+                torch.save(model, os.path.join(model_save_path,f'model_exp-aug2_epoch-{epoch}.pt'))
+
+        print('Epoch:',epoch)
 
             
 
 
 def plot_results(imgs, recons, save_path, epoch, idx):
 
-    bs = 10 #imgs.size(0)
+    bs = 8 #imgs.size(0)
     fig, axes = plt.subplots(nrows=2,ncols=bs,figsize=(bs*4,20))
 
     for i, (row,col) in enumerate(product(range(2),range(bs))):
@@ -254,16 +262,26 @@ def plot_results(imgs, recons, save_path, epoch, idx):
         axes[row][col].set_xticks([])
 
     plt.subplots_adjust(wspace=0,hspace=0)
-    plt.savefig(os.path.join(save_path,f'fig_{epoch}_{idx}.png'),format='png',bbox_inches='tight',pad_inches=0,dpi=100)
+    plt.savefig(os.path.join(save_path,f'fig_{epoch}_{idx}.jpg'),format='jpg',bbox_inches='tight',pad_inches=0,dpi=100)
     plt.show() 
 
 
 
-image_paths = glob.glob('/data/scratch/bariskurtkaya/dataset/PSF_INJECTION/*.png')
+injections = glob.glob('/data/scratch/bariskurtkaya/dataset/NIRCAM/1386/injections/*.png')[:35000]
+augmentations = glob.glob('/data/scratch/bariskurtkaya/dataset/NIRCAM/1386/sci_imgs/*')[:35000]
+
+test = glob.glob('/data/scratch/bariskurtkaya/dataset/NIRCAM/1386/sci_imgs/*')[35000:]
+
+with open(r'text_dirs.txt', 'w') as fp:
+    for item in test:
+        fp.write("%s\n" % item)
+    print('Done')
+
+image_paths = injections + augmentations
 
 
 syndata        = SynDataset(image_paths=image_paths)
-syndata_loader = DataLoader(dataset=syndata, batch_size=256)
+syndata_loader = DataLoader(dataset=syndata, batch_size=256, shuffle=True)
 
 kernels_enc = [7,7,7,7,7,7,7]
 paddings_enc= [0,0,0,0,0,0,0]
@@ -287,7 +305,7 @@ model = Exonet(convdim_enc_outputs=convdim_outputs,
                kernels_dec=kernels_dec, 
                strides_dec=strides_dec)
 optimizer = torch.optim.Adam(model.parameters(), lr=3e-4)  
-loss_fn   = torch.nn.MSELoss()
+loss_fn   = torch.nn.CrossEntropyLoss(reduction='sum')
 device    = 'cuda:2'
 
 train(model=model,train_dataloader=syndata_loader,optimizer=optimizer,loss_fn=loss_fn,device=device)
