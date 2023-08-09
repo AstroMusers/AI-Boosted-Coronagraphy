@@ -25,3 +25,4 @@ rule*.py
 *.fits
 *.png
 *.out
+*.pdf

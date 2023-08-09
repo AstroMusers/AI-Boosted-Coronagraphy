@@ -451,5 +451,6 @@ if __name__ == '__main__':
 
     print(diz_loss)
     print('Training completed!')
+    
     plot_ae_outputs(encoder, decoder, 10)
     wandb.finish()
