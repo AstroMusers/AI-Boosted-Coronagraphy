@@ -24,9 +24,9 @@ from notebooks.visualization_helpers import get_stage3_products
 
 import numpy as np
 
-import matplotlib.pyplot as plt
-
 from time import time
+
+from augmentation import Augmentation 
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 
@@ -34,13 +34,17 @@ class Injection():
     def __init__(self, psf_directory: str) -> None:
         print('Injection process has been started...')
 
+        self.psf_directory = psf_directory
+
         self.psfstacks_nircam_dirs = get_stage3_products(
             suffix='psfstack', directory=psf_directory)
 
         self.psfstacks = {}
         self.__create_psfstacks_dict()
 
-    def apply_injection(self, injection_count:int=10, flux_coefficients = [1, 2, 5, 10, 100, 1000, 10000]):
+        self.augmentation = Augmentation()
+
+    def apply_injection(self, injection_count:int=2, aug_count:int=20, flux_coefficients = [100, 1000, 10000]):
 
         for filter_key in self.psfstacks.keys():
             max_pixel_distance, min_pixel_distance = self.__get_max_min_pixel_distance(
@@ -58,16 +62,48 @@ class Injection():
             else:
                 generated_psf_selection = 0
             
-            for idx, psf in enumerate(self.psfstacks[filter_key][1].data):
+            for psf_idx, psf in enumerate(self.psfstacks[filter_key][1].data):
                 psf = self.__nan_elimination(psf)
+                norm_psf = self.augmentation.normalize(psf)
+                filename = f'{"/".join(self.psf_directory.split("/")[:-3])}/injections/{filter_key}-psf{psf_idx}'
+                self.__save_psf_to_npy(
+                    filename=f'{filename}.npy',
+                    psf=norm_psf)
+
                 if not self.__is_psf_empty(psf):
-                    self.__injection(idx, psf, generated_psf[generated_psf_selection].data, max_pixel_distance, min_pixel_distance, filter_key=filter_key, injection_count=injection_count, flux_coefficients=flux_coefficients)
+                    self.__injection(
+                        psf=norm_psf, 
+                        generated_psf=generated_psf[generated_psf_selection].data, 
+                        max_pixel_distance=max_pixel_distance, 
+                        min_pixel_distance=min_pixel_distance, 
+                        injection_count=injection_count, 
+                        flux_coefficients=flux_coefficients,
+                        filename=filename
+                    )
+                    for aug_idx in range(aug_count):
+                        # We should be consider the shift effect on injection.
+                        aug_psf, aug_filename = self.__augmentation(norm_psf, filename) 
+                        self.__injection(
+                            psf=aug_psf,
+                            generated_psf=generated_psf[generated_psf_selection].data, 
+                            max_pixel_distance=max_pixel_distance, 
+                            min_pixel_distance=min_pixel_distance, 
+                            injection_count=injection_count, 
+                            flux_coefficients=flux_coefficients,
+                            filename=aug_filename
+                        )
                 else:
                     pass
             
-    def __injection(self, idx, psf, generated_psf, max_pixel_distance:int, min_pixel_distance:int, filter_key:str, injection_count:int=10, flux_coefficients:list=[1, 2, 5, 10, 100, 1000, 10000]):
-        dataset_dir = get_dataset_dir()
-
+    def __injection(self, 
+                    psf, 
+                    generated_psf, 
+                    max_pixel_distance:int, 
+                    min_pixel_distance:int, 
+                    injection_count:int=10, 
+                    flux_coefficients:list=[100, 1000, 10000], 
+                    filename:str=''
+        ):
         for _ in range(injection_count):
             if max_pixel_distance > psf.shape[0]:
                 max_x = psf.shape[0]
@@ -95,13 +131,42 @@ class Injection():
                     int(temp_psf.shape[0]/2 - x): int(temp_psf.shape[0]/2 - x + psf.shape[0]),
                     int(temp_psf.shape[1]/2 - y): int(temp_psf.shape[1]/2 - y + psf.shape[1])
                 ] + psf)
-                                    
-                filename = f'{dataset_dir}/PSF_INJECTION/{filter_key}-psf{idx}-x{x}-y{y}-fc{flux_coefficient}.png'
 
-                plt.imsave(fname=filename, arr=injected, cmap='gray')
+                self.__save_psf_to_npy(
+                    filename=f'{filename}-x{x}-y{y}-fc{flux_coefficient}.npy', 
+                    psf=injected
+                )
         
         del temp_psf, injected, max_x, max_y, random_x, random_y, x, y, filename
-        
+    
+    def __save_psf_to_npy(self, filename, psf):
+        return np.save(filename, psf)
+
+    def __augmentation(self, psf, filename:str=''):
+        rotate_rand = np.random.randint(0, 4)
+        # If it equals to 0 then it will not rotate the image.
+        # If rotate rand equals to 1 then it will just rotate the image one time with 90 degrees.
+        flip_rand = np.random.randint(0, 3)
+        # If flip rand equals to 1 then it will just flip the image horizontally. 
+        # If flip rand equals to 2 then it will just flip the image vertically. 
+        # If flip rand equals to 3 then it will flip the image both horizontally and vertically.
+        vertical_shift_rand = np.random.randint(0, 3)
+        # 1 -> up
+        # 2 -> down
+        horizontal_shift_rand = np.random.randint(0, 3)
+        # 1 -> left
+        # 2 -> right
+        vertical_shift_pixel_rand = np.random.randint(1, 100)
+        horizontal_shift_pixel_rand = np.random.randint(1, 100)
+
+        augmented = self.augmentation.rotate90(psf, times=rotate_rand)
+        augmented = self.augmentation.flip(augmented, horizontal=True if flip_rand == 1 or flip_rand == 3 else False, vertical=True if flip_rand == 2 or flip_rand == 3 else False)
+        augmented = self.augmentation.shift(augmented, right_shift=horizontal_shift_pixel_rand if horizontal_shift_rand == 2 else -horizontal_shift_pixel_rand, down_shift=vertical_shift_pixel_rand if vertical_shift_rand == 2 else -vertical_shift_pixel_rand)
+
+        filename=f'{filename}-aug-rot{rotate_rand}-flip{flip_rand}-vshift{vertical_shift_rand}-hshift{horizontal_shift_rand}-vshiftp{vertical_shift_pixel_rand}-hshiftp{horizontal_shift_pixel_rand}'
+        del rotate_rand, flip_rand, vertical_shift_rand, horizontal_shift_rand, vertical_shift_pixel_rand, horizontal_shift_pixel_rand
+        return augmented, filename
+
     def __nan_elimination(self, psf):
         return np.nan_to_num(psf)
 
@@ -203,13 +268,18 @@ class Injection():
 
 if __name__ == '__main__':
 
+    np.random.seed(42)
+
     PROPOSAL_ID = '1386'
     INSTRUMENT = 'NIRCAM'
     psf_directory = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/mastDownload/JWST/'
 
+    fits_npy_dirs = glob(f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/fits_arrays/*.npy')
+
     injection = Injection(psf_directory=psf_directory)
 
-    injection_count = 10
-    flux_coefficients = [1, 2, 5, 10, 100, 1000, 10000]
+    injection_count = 2
+    aug_count = 20
+    flux_coefficients = [100, 1000, 10000]
 
-    injection.apply_injection(injection_count=injection_count, flux_coefficients=flux_coefficients)
+    injection.apply_injection(injection_count=injection_count, aug_count=aug_count, flux_coefficients=flux_coefficients)

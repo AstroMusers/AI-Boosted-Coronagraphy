@@ -175,7 +175,6 @@ class MyCoron3Pipeline(Pipeline):
 
                 try:
                     for model in psf_sub.to_container():
-                        print('Hello, resampleinputttssssssssssss')
                         resample_input.append(model)
 
                 except:
