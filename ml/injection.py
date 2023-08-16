@@ -26,7 +26,9 @@ import numpy as np
 
 from time import time
 
-from augmentation import Augmentation 
+from augmentation import Augmentation
+
+from tqdm import tqdm
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 
@@ -62,7 +64,7 @@ class Injection():
             else:
                 generated_psf_selection = 0
             
-            for psf_idx, psf in enumerate(self.psfstacks[filter_key][1].data):
+            for psf_idx, psf in enumerate(tqdm(self.psfstacks[filter_key][1].data)):
                 psf = self.__nan_elimination(psf)
                 norm_psf = self.augmentation.normalize(psf)
                 filename = f'{"/".join(self.psf_directory.split("/")[:-3])}/injections/{filter_key}-psf{psf_idx}'
@@ -164,6 +166,8 @@ class Injection():
         augmented = self.augmentation.shift(augmented, right_shift=horizontal_shift_pixel_rand if horizontal_shift_rand == 2 else -horizontal_shift_pixel_rand, down_shift=vertical_shift_pixel_rand if vertical_shift_rand == 2 else -vertical_shift_pixel_rand)
 
         filename=f'{filename}-aug-rot{rotate_rand}-flip{flip_rand}-vshift{vertical_shift_rand}-hshift{horizontal_shift_rand}-vshiftp{vertical_shift_pixel_rand}-hshiftp{horizontal_shift_pixel_rand}'
+        
+        self.__save_psf_to_npy(filename=f'{filename}.npy', psf=augmented)
         del rotate_rand, flip_rand, vertical_shift_rand, horizontal_shift_rand, vertical_shift_pixel_rand, horizontal_shift_pixel_rand
         return augmented, filename
 
