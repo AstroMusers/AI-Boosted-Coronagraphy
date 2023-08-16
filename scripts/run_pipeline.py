@@ -1,23 +1,12 @@
 import os
-from jwst.pipeline import Detector1Pipeline, Image2Pipeline, Coron3Pipeline
-import jwst.associations
-from jwst.associations.lib.rules_level3_base import DMS_Level3_Base
+from jwst.pipeline import Image2Pipeline, Coron3Pipeline
 from glob import glob
 import astropy.io.fits as fits
-import numpy as np
 import time
-import pandas as pd
-import json
-import pickle
-from json import JSONEncoder
-from collections import defaultdict
-from CoronPipeline import MyCoron3Pipeline
 from jwst.associations.mkpool import mkpool
-from jwst.associations.lib.rules_level3 import Asn_Lv3Coron
-from jwst.associations import AssociationPool, AssociationRegistry
-from jwst.associations.mkpool import from_cmdline, mkpool
+from jwst.associations import AssociationRegistry
+from jwst.associations.mkpool import mkpool
 from jwst.associations import generate
-from astropy.table import Table
 
 
 INSTRUME = 'NIRCAM'
@@ -70,16 +59,17 @@ def process_products(programs:list):
     for program in programs:
 
         directory = f'/data/scratch/bariskurtkaya/dataset/{INSTRUME}/{program}/mastDownload/JWST/'
-        # rateints_files = glob(os.path.join(directory, '*/*rateints.fits'))
-        # batch_size = 4
 
-        # for i in range(0,len(rateints_files),batch_size):
+        rateints_files = glob(os.path.join(directory, '*/*rateints.fits'))
+        batch_size = 4
+
+        for i in range(0,len(rateints_files),batch_size):
         
-        #     for f in rateints_files[i:i+batch_size]:
+            for f in rateints_files[i:i+batch_size]:
                 
-        #         output_dir = '/'.join(f.split('/')[:-1]) + '/' 
-        #         runimg2(f,output_dir)
-        #     time.sleep(1)
+                output_dir = '/'.join(f.split('/')[:-1]) + '/' 
+                runimg2(f,output_dir)
+            time.sleep(1)
     
         calints_data = glob(os.path.join(directory, '**/**calints.fits'))
         print(len(calints_data))
