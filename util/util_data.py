@@ -3,6 +3,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 from itertools import product
 from PIL import Image
+import numpy as np
 
 
 
@@ -15,18 +16,14 @@ class SynDataset(Dataset):
         transforms.ToTensor(),
         ])
 
-
     def __len__(self,):
 
         return len(self.image_paths)
-
+    
     def __getitem__(self, index):
         
-        image_path = self.image_paths[index]
-        image      = Image.open(image_path).convert('L')
+        image = self.image_paths[index]
+        image = np.load(image)
         image = self.transform(image)
 
-        if torch.isnan(image).any().item():
-            torch.nan_to_num(image)
-            
         return image

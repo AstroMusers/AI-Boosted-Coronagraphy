@@ -78,10 +78,10 @@ def arg_parser():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--device', type=str, default='cuda:0')
-    parser.add_argument('--idx',type=str, default='1')
+    parser.add_argument('--idx',type=str, default='injections_ae/0')
     parser.add_argument('--wandb', action='store_true', help='If true run wandb logger')
     parser.add_argument('--seed',type=int, default=0)
-    parser.add_arguemnt('--lr', type=int, default='0.001')
+    parser.add_argument('--lr', type=float, default='0.001')
     parser.add_argument('--batch_size', type=int, default=128)
     args = parser.parse_args()
     return args
