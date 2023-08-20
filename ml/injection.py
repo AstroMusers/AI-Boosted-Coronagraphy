@@ -33,10 +33,14 @@ from tqdm import tqdm
 warnings.simplefilter('ignore', category=AstropyWarning)
 
 class Injection():
-    def __init__(self, psf_directory: str) -> None:
+    def __init__(self, psf_directory: str, is_save_original:bool, is_save_augmented:bool, is_save_injected:bool) -> None:
         print('Injection process has been started...')
 
         self.psf_directory = psf_directory
+
+        self.is_save_original = is_save_original
+        self.is_save_augmented = is_save_augmented
+        self.is_save_injected = is_save_injected
 
         self.psfstacks_nircam_dirs = get_stage3_products(
             suffix='psfstack', directory=psf_directory)
@@ -67,10 +71,11 @@ class Injection():
             for psf_idx, psf in enumerate(tqdm(self.psfstacks[filter_key][1].data)):
                 psf = self.__nan_elimination(psf)
                 norm_psf = self.augmentation.normalize(psf)
-                filename = f'{"/".join(self.psf_directory.split("/")[:-3])}/injections/{filter_key}-psf{psf_idx}'
-                self.__save_psf_to_npy(
-                    filename=f'{filename}.npy',
-                    psf=norm_psf)
+                filename = f'{"/".join(self.psf_directory.split("/")[:-3])}/injections/train/{filter_key}-psf{psf_idx}'
+                if self.is_save_original:
+                    self.__save_psf_to_npy(
+                        filename=f'{filename}.npy',
+                        psf=norm_psf)
 
                 if not self.__is_psf_empty(psf):
                     self.__injection(
@@ -81,8 +86,8 @@ class Injection():
                         injection_count=injection_count, 
                         flux_coefficients=flux_coefficients,
                         filename=filename
-                    )
-                    for aug_idx in range(aug_count):
+                        )
+                    for _ in range(aug_count):
                         # We should be consider the shift effect on injection.
                         aug_psf, aug_filename = self.__augmentation(norm_psf, filename) 
                         self.__injection(
@@ -134,10 +139,11 @@ class Injection():
                     int(temp_psf.shape[1]/2 - y): int(temp_psf.shape[1]/2 - y + psf.shape[1])
                 ] + psf)
 
-                self.__save_psf_to_npy(
-                    filename=f'{filename}-x{x}-y{y}-fc{flux_coefficient}.npy', 
-                    psf=injected
-                )
+                if self.is_save_injected:
+                    self.__save_psf_to_npy(
+                        filename=f'{filename}-x{x}-y{y}-fc{flux_coefficient}.npy', 
+                        psf=injected
+                    )
         
         del temp_psf, injected, max_x, max_y, random_x, random_y, x, y, filename
     
@@ -167,7 +173,9 @@ class Injection():
 
         filename=f'{filename}-aug-rot{rotate_rand}-flip{flip_rand}-vshift{vertical_shift_rand}-hshift{horizontal_shift_rand}-vshiftp{vertical_shift_pixel_rand}-hshiftp{horizontal_shift_pixel_rand}'
         
-        self.__save_psf_to_npy(filename=f'{filename}.npy', psf=augmented)
+        if self.is_save_augmented:
+            self.__save_psf_to_npy(filename=f'{filename}.npy', psf=augmented)
+    
         del rotate_rand, flip_rand, vertical_shift_rand, horizontal_shift_rand, vertical_shift_pixel_rand, horizontal_shift_pixel_rand
         return augmented, filename
 
@@ -277,13 +285,15 @@ if __name__ == '__main__':
     PROPOSAL_ID = '1386'
     INSTRUMENT = 'NIRCAM'
     psf_directory = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/mastDownload/JWST/'
+    
+    is_save_original = True
+    is_save_augmented = True
+    is_save_injected = True
 
-    fits_npy_dirs = glob(f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/fits_arrays/*.npy')
+    injection = Injection(psf_directory=psf_directory, is_save_original=is_save_original, is_save_augmented=is_save_augmented, is_save_injected=is_save_injected)
 
-    injection = Injection(psf_directory=psf_directory)
-
-    injection_count = 2
-    aug_count = 20
-    flux_coefficients = [100, 1000, 10000]
+    injection_count = 3
+    aug_count = 30
+    flux_coefficients = [1, 10, 100, 1000, 10000]
 
     injection.apply_injection(injection_count=injection_count, aug_count=aug_count, flux_coefficients=flux_coefficients)

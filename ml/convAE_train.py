@@ -22,16 +22,10 @@ import pickle5 as pickle
 import sys
 sys.path.append("..")
 
-from util.util_main import get_dataset_dir
-
-
-
 
 class InjectionDataset(Dataset):
-    def __init__(self):
-        PROPOSAL_ID = '1386'
-        INSTRUMENT = 'NIRCAM'
-        self.data_dir = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/injections/*.npy'
+    def __init__(self, data_dir):
+        self.data_dir = data_dir
 
         self.class_map = {'star_only': 0, 'star_exo': 1}
         self.img_dim = (320, 320)
@@ -68,8 +62,8 @@ class InjectionDataset(Dataset):
         return img_tensor, class_id
 
 
-def set_device():
-    device = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
+def set_device(device_numb:int=3):
+    device = torch.device(f'cuda:{device_numb}' if torch.cuda.is_available() else 'cpu')
     if device.type == 'cuda':
         current_device = torch.cuda.current_device()
         print('Selected GPU Name:', torch.cuda.get_device_name(current_device))
@@ -247,7 +241,11 @@ if __name__ == '__main__':
     print('cuDNN version', torch.backends.cudnn.version())
 
     print('Dataset loading...')
-    dataset = InjectionDataset()
+    PROPOSAL_ID = '1386'
+    INSTRUMENT = 'NIRCAM'
+    data_dir = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/injections/train/*.npy'
+
+    dataset = InjectionDataset(data_dir=data_dir)
     print('Dataset loaded!')
 
     batch_size = 1024
