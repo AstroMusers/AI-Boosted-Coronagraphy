@@ -8,16 +8,18 @@ from convAE_train import InjectionDataset, set_device, DataLoader, Encoder
 
 import torch
 
+from tqdm import tqdm
+
 class LatentSpace():
     def __init__(self, encoder_dir, data_dir, batch_size, device) -> None:
         self.device = device
 
         self.encoder = self.__get_encoder(encoder_dir=encoder_dir)
 
-        self.dataset = InjectionDataset(data_dir=data_dir)
-        self.dataloader = DataLoader(self.dataset, batch_size=batch_size, shuffle=True)
+        dataset = InjectionDataset(data_dir=data_dir)
+        dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-        latent_space = self.__create_latent()
+        latent_space = self.__create_latent(dataloader)
 
         save_dir = f'{"/".join(encoder_dir.split("/")[:-1])}/latent_v1/{encoder_dir.split("/")[-1].split("_")[0]}_latent_space.npy'
 
@@ -30,10 +32,11 @@ class LatentSpace():
         
         return encoder
 
-    def __create_latent(self):
+    def __create_latent(self, dataloader):
         latent_space = []
 
-        for image_batch, label in self.dataloader:
+        for _ ,data in enumerate(tqdm(dataloader)):
+            image_batch, label = data
             self.encoder.eval()
             with torch.no_grad():
                 latent = self.encoder(image_batch.to(self.device))
@@ -54,7 +57,7 @@ if __name__ == '__main__':
     INSTRUMENT = 'NIRCAM'
     data_dir = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/injections/test/*.npy'
 
-    enc_epoch = 149
+    enc_epoch = 399
     encoder_dir = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/models/modelv1/{enc_epoch}_enc.pickle'
 
     batch_size = 1024
