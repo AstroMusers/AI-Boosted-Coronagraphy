@@ -21,7 +21,7 @@ class LatentSpace():
 
         latent_space = self.__create_latent(dataloader)
 
-        save_dir = f'{"/".join(encoder_dir.split("/")[:-1])}/latent_v1/{encoder_dir.split("/")[-1].split("_")[0]}_latent_space.npy'
+        save_dir = f'{"/".join(encoder_dir.split("/")[:-1])}/latent_v1/train_{encoder_dir.split("/")[-1].split("_")[0]}_latent_space.npy'
 
         self.__save_latent(latent_space, save_dir)
 
@@ -55,12 +55,12 @@ if __name__ == '__main__':
     
     PROPOSAL_ID = '1386'
     INSTRUMENT = 'NIRCAM'
-    data_dir = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/injections/test/*.npy'
+    data_dir = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/injections/train/*.npy'
 
-    enc_epoch = 399
+    enc_epoch = 374
     encoder_dir = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/models/modelv1/{enc_epoch}_enc.pickle'
 
-    batch_size = 1024
+    batch_size = 2048
     device = set_device(3)
 
     with open(f'{encoder_dir}', 'rb') as fin:
