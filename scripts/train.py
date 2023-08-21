@@ -23,7 +23,6 @@ from ml.models import AExonet, VAExonet
 args = arg_parser()
 init_wandb(args)
 
-
 train_paths = glob.glob(os.path.join(INJECTIONS,'train/*.npy'))
 print(len(train_paths))
 test_paths = glob.glob(os.path.join(INJECTIONS,'test/*.npy'))

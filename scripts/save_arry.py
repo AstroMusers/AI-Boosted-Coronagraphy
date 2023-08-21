@@ -8,7 +8,7 @@ from jwst import datamodels
 import math
 import PIL
 from IPython.display import display
-from visualization_helpers import get_headers
+from scripts.visualization_helpers import get_headers
 
 def get_hdu(fits_,data):
     
