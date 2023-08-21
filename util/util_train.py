@@ -83,6 +83,8 @@ def arg_parser():
     parser.add_argument('--seed',type=int, default=0)
     parser.add_argument('--lr', type=float, default='0.001')
     parser.add_argument('--batch_size', type=int, default=128)
+    parser.add_argument('--loss_type', type=str, default='l1')
+    parser.add_argument('--optim', type=str, default='sgd')
     args = parser.parse_args()
     return args
 
