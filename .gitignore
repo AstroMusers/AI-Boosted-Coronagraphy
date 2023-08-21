@@ -25,3 +25,8 @@ rule*.py
 *.fits
 *.png
 *.out
+*.npy
+*.pt
+*.jpg
+*.png
+*.pdf

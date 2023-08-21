@@ -7,5 +7,5 @@ jdaviz
 webbpsf
 pysynphot
 astroquery
-jwst
 opencv-python
+jwst
