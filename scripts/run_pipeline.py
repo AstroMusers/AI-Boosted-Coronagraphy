@@ -59,7 +59,6 @@ def process_products(programs:list):
     for program in programs:
 
         directory = f'/data/scratch/bariskurtkaya/dataset/{INSTRUME}/{program}/mastDownload/JWST/'
-
         rateints_files = glob(os.path.join(directory, '*/*rateints.fits'))
         batch_size = 4
 
@@ -70,6 +69,7 @@ def process_products(programs:list):
                 output_dir = '/'.join(f.split('/')[:-1]) + '/' 
                 runimg2(f,output_dir)
             time.sleep(1)
+
     
         calints_data = glob(os.path.join(directory, '**/**calints.fits'))
         print(len(calints_data))
@@ -88,3 +88,4 @@ def process_products(programs:list):
 
 programs = ['1386']
 process_products(programs)
+
