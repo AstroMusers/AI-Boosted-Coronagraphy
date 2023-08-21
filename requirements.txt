@@ -8,3 +8,4 @@ webbpsf
 pysynphot
 astroquery
 opencv-python
+jwst
