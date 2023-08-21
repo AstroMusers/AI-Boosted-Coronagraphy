@@ -11,7 +11,6 @@ import math
 
 
 
-
 def get_lower_products(suffix,directory):
     return glob(os.path.join(directory, f'**/*{suffix}.fits'))
 
@@ -20,61 +19,43 @@ def get_stage3_products(suffix,directory):
     return glob(os.path.join(directory, f'*{suffix}.fits'))
 
 
-def plot_psfaligns(psfaligns,title,w,filtrs,detectors,axis_points):
-    
+def get_axis_labels(w):
+
     times = RA2time(w[0])
     y_labels = create_axis_label(times,fixed=2)
     x_labelish = [str(round(x_label,3)) for x_label in w[1]]
     x_labels = create_declination_labels(x_labelish)
-    
-    
-    for data in range(len(psfaligns)):
-        
-        nints = psfaligns[data].shape[0]
-        npsfs = psfaligns[data].shape[1]
-        nrow  = math.gcd(nints,npsfs)
-        ncol  = npsfs//nints
-                      
-        for ints in range(nints):
-                      
-            if nints == 2:
-                _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(36,8))
-        
-            else:
-                _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(36,16))
-                      
-            for psfs, (row,col) in enumerate(itertools.product(range(nrow),range(ncol))):
-                
-                axes[row][col].imshow(psfaligns[data][ints][psfs],clim=(0,50),cmap='gray')
-                if (row == 1) & (col == 0) & (nrow == 2):
-                    axes[row][col].set_yticks(axis_points,y_labels,rotation=45)
-                    axes[row][col].set_xticks(axis_points,x_labels,rotation=70)
-                    axes[row][col].set_xlabel('DEC',fontsize=15,fontweight='bold')
-                    axes[row][col].set_ylabel('RA',fontsize=15,fontweight='bold')
-                    
-                elif (row == 3) & (col == 0) & (nrow == 4):
-                    
-                    axes[row][col].set_yticks(axis_points,y_labels,rotation=45)
-                    axes[row][col].set_xticks(axis_points,x_labels,rotation=70)
-                    axes[row][col].set_xlabel('DEC',fontsize=15,fontweight='bold')
-                    axes[row][col].set_ylabel('RA',fontsize=15,fontweight='bold')
-                    
-                    
-                else:
-                    axes[row][col].set_yticks([])
-                    axes[row][col].set_xticks([])
-                      
-            if ints == 0:
-                plt.text(0.85, 1, filtrs[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
-                plt.text(0.85, 0.95, detectors[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
-                
-            plt.text(0.10, 1, ints+1, fontsize=15,fontweight='bold',transform=plt.gcf().transFigure)
-            _.patch.set_facecolor('#423f3b')
-            plt.subplots_adjust(wspace=0,hspace=0)
-            plt.suptitle(title,y=1,x=0.5,fontsize=25,fontweight='bold')
-            plt.show()    
-        
 
+    return y_labels,x_labels
+
+def pixel_to_arcsec_nircam(axis_length,wavelength):
+    
+    short_wavelengths = ['F070W', 'F090W', 'F115W', 'F140M', 'F150W', 'F162M', 'F164N', 'F150W2', 'F182M', 'F187N', 'F200W', 'F210M', 'F212N']
+
+    long_wavelengths = ['F250M', 'F277W', 'F300M', 'F322W2', 'F323N', 'F335M', 'F356W', 'F360M', 'F405N', 'F410M', 'F430M', 'F444W', 'F460M', 'F466N', 'F470N', 'F480M']
+    
+    if wavelength in short_wavelengths:
+        x = 1 / 0.031 
+    
+    elif wavelength in long_wavelengths:
+        x = 1 / 0.063
+
+    else:
+        raise ValueError('Wavelength not found!')
+    
+    zero_point = axis_length / 2
+    pos_current_point = zero_point
+    neg_current_point = zero_point
+    
+    arcsec_axis_points = [zero_point]
+
+    while (pos_current_point + x) < axis_length:
+        pos_current_point += x
+        neg_current_point -= x
+        #print(pos_current_point)
+        arcsec_axis_points.append(pos_current_point)
+        arcsec_axis_points.append(neg_current_point)
+        
 def get_hdu(fits_,data):
     
     pri_data = []
@@ -138,23 +119,6 @@ def get_sci(fits_):
         
     return header,sci_data
     
-    
-def plot_rateints_calints(data,ncols,nrows):
-    
-    nints = data[0].shape[0]
-    
-    _,axes = plt.subplots(nrows=nrows*nints, ncols=ncols*nints, figsize=(25,10))
-    for nint in range(nints):
-        for index,(row,col) in enumerate(itertools.product(range(nrows),range(ncols))):
-            axes[row][col].imshow(np.sin(data[nint][index]),clim=(-1,1),cmap='gray') 
-            
-            if index != 0:
-                axes[row][col].set_yticks([])
-
-    plt.subplots_adjust(wspace=0,hspace=0)
-    plt.suptitle(title,y=0.75,x=0.5,fontsize=20)
-    plt.show()
-
     
 def pixel2wcs(fits_,ispsf=False): 
     file = fits.open(fits_)
@@ -263,96 +227,60 @@ def check_hdu_dims(file,hdu:int):
         
     return dims
 
-def pixel_to_arcsec_nircam(axis_length,wavelength):
+def plot_psfaligns(psfaligns,title,w,filtrs,detectors,axis_points):
     
-    short_wavelengths = ['F070W', 'F090W', 'F115W', 'F140M', 'F150W', 'F162M', 'F164N', 'F150W2', 'F182M', 'F187N', 'F200W', 'F210M', 'F212N']
+    # times = RA2time(w[0])
+    # y_labels = create_axis_label(times,fixed=2)
+    # x_labelish = [str(round(x_label,3)) for x_label in w[1]]
+    # x_labels = create_declination_labels(x_labelish)
 
-    long_wavelengths = ['F250M', 'F277W', 'F300M', 'F322W2', 'F323N', 'F335M', 'F356W', 'F360M', 'F405N', 'F410M', 'F430M', 'F444W', 'F460M', 'F466N', 'F470N', 'F480M']
+    y_labels, x_labels = get_axis_labels(w)
     
-    if wavelength in short_wavelengths:
-        x = 1 / 0.031 
-    
-    elif wavelength in long_wavelengths:
-        x = 1 / 0.063
-
-    else:
-        raise ValueError('Wavelength not found!')
-    
-    zero_point = axis_length / 2
-    pos_current_point = zero_point
-    neg_current_point = zero_point
-    
-    arcsec_axis_points = [zero_point]
-
-    while (pos_current_point + x) < axis_length:
-        pos_current_point += x
-        neg_current_point -= x
-        #print(pos_current_point)
-        arcsec_axis_points.append(pos_current_point)
-        arcsec_axis_points.append(neg_current_point)
-    
-    
-    
-    return arcsec_axis_points
-
-
-
-def plot_calints(calints,sci_calints,header_calints,title,instrume):
-    
+    for data in range(len(psfaligns)):
         
-    for data in range(len(calints)):
+        nints = psfaligns[data].shape[0]
+        npsfs = psfaligns[data].shape[1]
+        nrow  = math.gcd(nints,npsfs)
+        ncol  = npsfs//nints
+                      
+        for ints in range(nints):
+                      
+            if nints == 2:
+                _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(36,8))
         
-        world_coords, axis_points = pixel2wcs(calints[data],ispsf=True)
-        filtrs = get_filters(header_calints)
-        
-        times = RA2time(world_coords[0])
-        y_labels = create_axis_label(times,fixed=2)
-        x_labelish = [str(round(x_label,3)) for x_label in world_coords[1]]
-        x_labels = create_declination_labels(x_labelish)
-        
-        ncol = sci_calints[data].shape[0]
-        
-        if instrume == 'NIRCAM':
-            _, axes = plt.subplots(nrows=1,ncols=ncol,figsize=(36,16))
-        
-        elif instrume == 'MIRI':
-            _, axes = plt.subplots(nrows=1,ncols=ncol,figsize=(20,15))
-            
-        
-        
-        for ints, (row,col) in enumerate(itertools.product(range(1),range(ncol))):
-            
-            if ncol == 1:
-                axes.imshow(sci_calints[data][ints],clim=(0,50),cmap='gray')
+            else:
+                _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(36,16))
+                      
+            for psfs, (row,col) in enumerate(itertools.product(range(nrow),range(ncol))):
                 
-                if (row == 0) & (col == 0):
-                    axes.set_yticks(axis_points,y_labels,rotation=45)
-                    axes.set_xticks(axis_points,x_labels,rotation=70)
-                    axes.set_xlabel('DEC',fontsize=15,fontweight='bold')
-                    axes.set_ylabel('RA',fontsize=15,fontweight='bold')
+                axes[row][col].imshow(psfaligns[data][ints][psfs],clim=(0,50),cmap='gray')
+                if (row == 1) & (col == 0) & (nrow == 2):
+                    axes[row][col].set_yticks(axis_points,y_labels,rotation=45)
+                    axes[row][col].set_xticks(axis_points,x_labels,rotation=70)
+                    axes[row][col].set_xlabel('DEC',fontsize=15,fontweight='bold')
+                    axes[row][col].set_ylabel('RA',fontsize=15,fontweight='bold')
+                    
+                elif (row == 3) & (col == 0) & (nrow == 4):
+                    
+                    axes[row][col].set_yticks(axis_points,y_labels,rotation=45)
+                    axes[row][col].set_xticks(axis_points,x_labels,rotation=70)
+                    axes[row][col].set_xlabel('DEC',fontsize=15,fontweight='bold')
+                    axes[row][col].set_ylabel('RA',fontsize=15,fontweight='bold')
+                    
+                    
                 else:
-                    axes.set_yticks([])
-                    axes.set_xticks([])
+                    axes[row][col].set_yticks([])
+                    axes[row][col].set_xticks([])
+                      
+            if ints == 0:
+                plt.text(0.85, 1, filtrs[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+                plt.text(0.85, 0.95, detectors[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
                 
-                
-            if ncol > 1:
-                axes[col].imshow(sci_calints[data][ints],clim=(0,75),cmap='gray')
-        
-                if (row == 0) & (col == 0):
-                    axes[col].set_yticks(axis_points,y_labels,rotation=45)
-                    axes[col].set_xticks(axis_points,x_labels,rotation=70)
-                    axes[col].set_xlabel('DEC',fontsize=15,fontweight='bold')
-                    axes[col].set_ylabel('RA',fontsize=15,fontweight='bold')
-                else:
-                    axes[col].set_yticks([])
-                    axes[col].set_xticks([])
-
-        #plt.text(0.9, 1, filtrs[data], fontsize=25,fontweight='bold',transform=plt.gcf().transFigure)
-        _.patch.set_facecolor('#423f3b')
-        plt.subplots_adjust(wspace=0,hspace=0)
-        plt.suptitle(title,y=1,x=0.5,fontsize=25,fontweight='bold')
-        plt.show()
-    
+            plt.text(0.10, 1, ints+1, fontsize=15,fontweight='bold',transform=plt.gcf().transFigure)
+            _.patch.set_facecolor('#423f3b')
+            plt.subplots_adjust(wspace=0,hspace=0)
+            plt.suptitle(title,y=1,x=0.5,fontsize=25,fontweight='bold')
+            plt.show()   
     
     
 def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program,targprop):
@@ -362,8 +290,9 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
     x_labelish = [str(round(x_label,3)) for x_label in w[1]]
     x_labels = create_declination_labels(x_labelish)
     
+    #y_labels, x_labels = get_axis_labels(w)
+
     for data in range(len(psfstack)):
-        
         
         if instrume[data] == 'NIRCAM':
             _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(36,8))
@@ -371,20 +300,18 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
         elif instrume[data] == 'MIRI':
             _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(28,8))
         
-        y_axis_arcsec = [ y for y in np.sort(pixel_to_arcsec_nircam(320,wavelength=filtrs[data]))]
-        
-        negative = [-x for x in range((len(y_axis_arcsec)//2)+1)]
-        positive = [ x for x in range((len(y_axis_arcsec)//2)+1)]
-        arcsec_labels = negative + positive
-        arcsec_labels = arcsec_labels[1:]
-        arcsec_labels.sort()
-        
-        #print(y_axis_arcsec)
-        #print(type(y_axis_arcsec))
+        # y_axis_arcsec = [y for y in np.sort(pixel_to_arcsec_nircam(320,wavelength=filtrs[data]))]
+            
+        # negative = [-x for x in range((len(y_axis_arcsec)//2)+1)]
+        # positive = [ x for x in range((len(y_axis_arcsec)//2)+1)]
+        # arcsec_labels = negative + positive
+        # arcsec_labels = arcsec_labels[1:]
+        # arcsec_labels.sort()
+
 
         for psf,(row,col) in enumerate(itertools.product(range(nrow),range(ncol))):
             
-            axes[row][col].imshow(psfstack[data][psf],clim=(0,50),cmap='gray')
+            axes[row][col].imshow(psfstack[data][psf],cmap='gray')
  
             
             
@@ -394,12 +321,6 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
                 axes[row][col].set_xticks(axis_points,x_labels)
                 axes[row][col].set_xlabel('DEC',fontsize=15,fontweight='bold')
                 axes[row][col].set_ylabel('RA',fontsize=15,fontweight='bold')
-            
-                #axes[row][col].yaxis.tick_right()
-                #axes[row][col].set_yticks(y_axis_arcsec,arcsec_labels,rotation=15)
-                #axes[row][col].yaxis.set_label_position("right")
-                #axes[row][col].set_ylabel('PIX2ARCSEC',fontsize=15,fontweight='bold')
-                #axes[row][col].set_xticks([])
             
             else:
                 axes[row][col].set_yticks([])
@@ -418,11 +339,13 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
         
 def plot_i2d(data,ncols,title,w,axis_points,filtrs,instrume,program,targprop,nrows=1,save=False):
 
-    times = RA2time(w[0])
-    y_labels = create_axis_label(times,fixed=2)
-    x_labelish = [str(round(x_label,3)) for x_label in w[1]]
-    x_labels = create_declination_labels(x_labelish)
+    # times = RA2time(w[0])
+    # y_labels = create_axis_label(times,fixed=2)
+    # x_labelish = [str(round(x_label,3)) for x_label in w[1]]
+    # x_labels = create_declination_labels(x_labelish)
     
+    y_labels, x_labels = get_axis_labels(w)
+
     _,axes = plt.subplots(nrows=1, ncols=ncols, figsize=(40,10))
     
     for index,(row,col) in enumerate(itertools.product(range(nrows),range(ncols))):
@@ -457,11 +380,12 @@ def plot_i2d(data,ncols,title,w,axis_points,filtrs,instrume,program,targprop,nro
     
 def plot_psfaligns(psfaligns,title,w,filtrs,instrume,program,targprop,axis_points):
     
-    times = RA2time(w[0])
-    y_labels = create_axis_label(times,fixed=2)
-    x_labelish = [str(round(x_label,3)) for x_label in w[1]]
-    x_labels = create_declination_labels(x_labelish)
+    # times = RA2time(w[0])
+    # y_labels = create_axis_label(times,fixed=2)
+    # x_labelish = [str(round(x_label,3)) for x_label in w[1]]
+    # x_labels = create_declination_labels(x_labelish)
     
+    y_labels, x_labels = get_axis_labels(w)
     
     for data in range(len(psfaligns)):
         
@@ -515,10 +439,12 @@ def plot_psfaligns(psfaligns,title,w,filtrs,instrume,program,targprop,axis_point
         
 def plot_psfsubs(psfsubs,title,w,filtrs,instrume,program,targprop,axis_points):
     
-    times = RA2time(w[0])
-    y_labels = create_axis_label(times,fixed=2)
-    x_labelish = [str(round(x_label,3)) for x_label in w[1]]
-    x_labels = create_declination_labels(x_labelish)
+    # times = RA2time(w[0])
+    # y_labels = create_axis_label(times,fixed=2)
+    # x_labelish = [str(round(x_label,3)) for x_label in w[1]]
+    # x_labels = create_declination_labels(x_labelish)
+
+    y_labels, x_labels = get_axis_labels(w)
     
     for data in range(len(psfsubs)):
         
@@ -557,10 +483,12 @@ def plot_psfsubs(psfsubs,title,w,filtrs,instrume,program,targprop,axis_points):
         
 def plot_i2d_mir(data,ncols,title,w,axis_points,filtrs,instrume,program,targprop,nrows=1,save=False):
 
-    times = RA2time(w[0])
-    y_labels = create_axis_label(times,fixed=2)
-    x_labelish = [str(round(x_label,3)) for x_label in w[1]]
-    x_labels = create_declination_labels(x_labelish)
+    # times = RA2time(w[0])
+    # y_labels = create_axis_label(times,fixed=2)
+    # x_labelish = [str(round(x_label,3)) for x_label in w[1]]
+    # x_labels = create_declination_labels(x_labelish)
+
+    y_labels, x_labels = get_axis_labels(w)
     
     _,axes = plt.subplots(nrows=1, ncols=ncols, figsize=(35,7))
     
@@ -574,8 +502,6 @@ def plot_i2d_mir(data,ncols,title,w,axis_points,filtrs,instrume,program,targprop
                 axes[col].set_xticks([])
             
             else:
-                #axes[col].set_yticks(axis_points,y_labels,rotation=45)
-                #axes[col].set_xticks(axis_points,x_labels,rotation=70)
                 axes[col].set_xlabel('DEC',fontsize=15,fontweight='bold')
                 axes[col].set_ylabel('RA',fontsize=15,fontweight='bold')
                 
@@ -586,7 +512,6 @@ def plot_i2d_mir(data,ncols,title,w,axis_points,filtrs,instrume,program,targprop
     plt.text(0.9, 0, program[index], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
     _.patch.set_facecolor('#423f3b')
     plt.subplots_adjust(wspace=0,hspace=0)
-    #plt.suptitle(title,y=0.88,x=0.5,fontsize=20,fontweight='bold')
     plt.show()
     
     if save:
