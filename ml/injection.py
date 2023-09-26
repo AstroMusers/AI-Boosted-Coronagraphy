@@ -20,7 +20,7 @@ from astroquery.ipac.nexsci.nasa_exoplanet_archive import NasaExoplanetArchive
 from astropy.utils.exceptions import AstropyWarning
 
 from util.util_main import get_filename_from_dir, get_dataset_dir
-from notebooks.visualization_helpers import get_stage3_products
+from scripts.visualization_helpers import get_stage3_products
 
 import numpy as np
 
@@ -60,8 +60,10 @@ class Injection():
             fov = np.round(np.sqrt(self.psfstacks[filter_key][1].header['PIXAR_A2']), 3) * self.psfstacks[filter_key][1].data.shape[1]
             detector = self.psfstacks[filter_key][0].header['DETECTOR']
             filter = self.psfstacks[filter_key][0].header['FILTER']
+            pupil_mask = self.psfstacks[filter_key][0].header['PUPIL']
+            image_mask = self.psfstacks[filter_key][0].header['CORONMSK']
 
-            generated_psf = self.__generate_psf_model(detector=detector, filter=filter, fov=fov*2, save=True)
+            generated_psf = self.__generate_psf_model(detector=detector, filter=filter, pupil_mask=pupil_mask, image_mask=image_mask, fov=fov*2, save=True)
 
             if self.psfstacks[filter_key][0].header['CHANNEL'] == 'LONG':
                 generated_psf_selection = 1
@@ -148,6 +150,7 @@ class Injection():
         del temp_psf, injected, max_x, max_y, random_x, random_y, x, y, filename
     
     def __save_psf_to_npy(self, filename, psf):
+        os.makedirs('/'.join(filename.split('/')[:-1]), exist_ok=True)
         return np.save(filename, psf)
 
     def __augmentation(self, psf, filename:str=''):
@@ -182,14 +185,19 @@ class Injection():
     def __nan_elimination(self, psf):
         return np.nan_to_num(psf)
 
-    def __generate_psf_model(self, detector:str, filter:str, fov:float, save:bool=True):
+    def __generate_psf_model(self, detector:str, filter:str, pupil_mask:str, image_mask:str, fov:float, save:bool=True):
         
         if detector == 'NRCALONG':
             detector = 'NRCA5'
         elif detector == 'NRCBLONG':
             detector = 'NRCB5'
+        
+        image_mask = list(image_mask)
+        image_mask.pop(4) # MASKA335R -> MASK335R
+        image_mask = ''.join(image_mask)
 
-        psf_dir = get_dataset_dir() + f'/PSF_SAMPLES/{detector}-{filter}-{fov}.fits'
+
+        psf_dir = get_dataset_dir() + f'/PSF_SAMPLES/{detector}-{filter}-{fov}-{pupil_mask}-{image_mask}.fits'
         psf_dir_glob = glob(psf_dir)
 
         if psf_dir_glob != []:
@@ -197,6 +205,7 @@ class Injection():
             print(f'{detector}-{filter} PSF with {fov} arcsec fov collected from cache.')
             del psf_dir, psf_dir_glob
         else:
+            os.makedirs(get_dataset_dir() + f'/PSF_SAMPLES/', exist_ok=True)
             if 'NRC' in detector:
                 wpsf = webbpsf.NIRCam()
             elif 'MIR' in detector:
@@ -207,6 +216,8 @@ class Injection():
             time_start = time()
             wpsf.detector = detector
             wpsf.filter = filter
+            wpsf.pupil_mask = pupil_mask
+            wpsf.image_mask = image_mask
 
             if save:
                 generated_psf = wpsf.calc_psf(fov_arcsec=fov, oversample=2, outfile=f'{psf_dir}')
@@ -275,11 +286,8 @@ class Injection():
         psd = np.log10(psd)
         psd = psd/psd.max()
         return psd
-    
 
-
-if __name__ == '__main__':
-
+def main():
     np.random.seed(42)
 
     PROPOSAL_ID = '1386'
@@ -297,3 +305,6 @@ if __name__ == '__main__':
     flux_coefficients = [1, 10, 100, 1000, 10000]
 
     injection.apply_injection(injection_count=injection_count, aug_count=aug_count, flux_coefficients=flux_coefficients)
+
+if __name__ == '__main__':
+    main()
