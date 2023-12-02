@@ -1,10 +1,33 @@
 from astropy.table import unique, vstack
 from astroquery.mast import Observations
+import os
 
 import jwst
 
-from ..util.util_type import PSGD, List
-from ..util.util_main import get_mast_token, get_dataset_dir
+#from ..util.util_type import PSGD, List
+
+
+
+def get_util_main_dir():
+    return os.path.realpath(__file__)
+
+def get_main_dir():
+    current_dir = get_util_main_dir()
+    current_dir = current_dir.split('/')
+    main_dir = '/'.join(current_dir[:-2])
+
+    del current_dir
+    return main_dir
+
+def get_dataset_dir():
+    main_dir = get_main_dir()
+    dataset_dir = main_dir + "/dataset"
+
+    # refactor needed.
+    dataset_dir = '/data/scratch/sarperyurtseven/dataset'
+
+    del main_dir
+    return dataset_dir
 
 
 class Query:
@@ -12,22 +35,21 @@ class Query:
         print(
             f"Query.py file activated. Current JWST Version: {jwst.__version__}")
 
-        mast_token: str = get_mast_token()
-        Observations.login(mast_token)
+        # mast_token: str = get_mast_token()
+        # Observations.login(mast_token)
 
-        del mast_token
 
         # query param initialization
         self.instrume: str = None
         self.proposal_id: str = None
-        self.psgd: PSGD = None
-        self.instrument_names: List[str] = None
+        self.psgd = None
+        self.instrument_names = None
 
-    def get_proposal_products(self, instrume: str, proposal_id: str, psgd: PSGD, instrument_names: List[str]):
+    def get_proposal_products(self, instrume: str, proposal_id: str, psgd, instrument_names):
         self.instrume: str = instrume
         self.proposal_id: str = proposal_id
-        self.psgd: PSGD = psgd
-        self.instrument_names: List[str] = instrument_names
+        self.psgd = psgd
+        self.instrument_names = instrument_names
 
         try:
             obs_res = Observations.query_criteria(
@@ -59,9 +81,10 @@ class Query:
         return self.products, self.filtered_products
 
     def download_files(self, main_dataset_dir: str):
-        if main_dataset_dir is None:
-            main_dataset_dir = get_dataset_dir()
-
+        # if main_dataset_dir is None:
+        #     main_dataset_dir = get_dataset_dir()
+        
+        dataset_dir = main_dataset_dir
         dataset_dir = dataset_dir + f"/{self.instrume}/{self.proposal_id}"
         try:
             print(
@@ -77,17 +100,20 @@ class Query:
 
 if __name__ == "__main__":
 
-    proposal_ids: List[str] = ['1068', '1075', '1184', '1194', '1386', '1411',
-                               '1412', '1441', '1482', '1536', '1537', '1538', '2183', '2278', '2635', '4454']
+    # proposal_ids: List[str] = ['1068', '1075', '1184', '1194', '1386', '1411',
+    #                            '1412', '1441', '1482', '1536', '1537', '1538', '2183', '2278', '2635', '4454']
+
+    #proposal_ids: List[str] = ['1386']
+    proposal_ids = ['1386']
 
     instrume: str = 'NIRCAM'
 
     # , 'NIRCAM/IMAGE','NIRCAM']
-    instrument_names: List[str] = ['NIRCAM/CORON', 'NIRCAM/TARGACQ']
+    instrument_names= ['NIRCAM/CORON', 'NIRCAM/TARGACQ']
 
-    psgd: PSGD = ['RATEINTS', 'ASN']
+    psgd= ['RATEINTS']
 
-    main_dataset_dir: str = '/data/scratch/bariskurtkaya/dataset/'
+    main_dataset_dir: str = '/data/scratch/sarperyurtseven/dataset/'
 
     # Class init
     query = Query()

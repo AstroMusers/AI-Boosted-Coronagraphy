@@ -1,11 +1,18 @@
 import subprocess
 
+### MULTIPLE EXPERIMENT script
 
 exp_h = [
-    "python train.py --device cuda:0 --idx injection_ae/0 --wandb --seed 0 --lr 0.001 --batch_size 256",
-    "python train.py --device cuda:1 --idx injection_ae/1 --wandb --seed 0 --lr 3e-4 --batch_size 256",
-]
+    "python train_ae.py --device cuda:0 --idx ae_filter/4 --wandb --loss_type l1 --seed 0 --lr 3e-5 --batch_size 256 --model ae --scheduler --apply_lowpass",
+    "python train_ae.py --device cuda:0 --idx ae_filter/5 --wandb --loss_type l1 --seed 0 --lr 3e-4 --batch_size 256 --model ae --scheduler --apply_lowpass",
+    "python train_ae.py --device cuda:0 --idx ae_filter/6 --wandb --loss_type l1 --seed 0 --lr 3e-3 --batch_size 256 --model ae --scheduler --apply_lowpass",
 
+
+    "python train_ae.py --device cuda:3 --idx ae_filter/7 --wandb --loss_type l2 --seed 0 --lr 3e-4 --batch_size 512 --model ae  --scheduler --apply_lowpass --latent_dim 8", #
+    "python train_ae.py --device cuda:3 --idx ae_filter/8 --wandb --loss_type l2 --seed 0 --lr 3e-4 --batch_size 512 --model ae  --scheduler --apply_lowpass --latent_dim 16", #
+    "python train_ae.py --device cuda:3 --idx ae_filter/9 --wandb --loss_type l2 --seed 0 --lr 3e-4 --batch_size 512 --model ae  --scheduler --apply_lowpass --latent_dim 4", #
+    "python train_ae.py --device cuda:3 --idx ae_filter/10 --wandb --loss_type l2 --seed 0 --lr 3e-4 --batch_size 512 --model ae  --scheduler --apply_lowpass --latent_dim 2", #
+]
 
 
 def main():
@@ -14,7 +21,7 @@ def main():
     python_commands = exp_h
 
     commands = {
-        f"sess-{i+1}":bashcode + el for i,el in enumerate(python_commands)
+        f"new-{i}":bashcode + el for i,el in enumerate(python_commands)
     }
     
     eval = 'eval "$(conda shell.bash hook)"'
@@ -25,7 +32,7 @@ def main():
         code3 = f"tmux+send-keys+-t+{k}+conda activate jwst-dev+Enter"
         code4 = f"tmux+send-keys+-t+{k}+{v}+Enter"
 
-        for i in [code1, code2, code3,code4]:
+        for i in [code1, code2, code3, code4]:
             res = subprocess.run(i.split('+'))
             print(res)
 

@@ -7,359 +7,403 @@ from torch.nn import functional as F
 from torchvision import transforms
 from tqdm.auto import tqdm
 import os
+from collections import defaultdict
+from typing import List, Callable, Union, Any, TypeVar, Tuple
+from torch import nn
+from abc import abstractmethod
+import cv2
 
 from util.util_data import *
 from util.util_dirs import *
 from util.util_train import *
 
+class Train():
 
-class AExonet(nn.Module):
-    
-    def __init__(self, args, convdim_enc_outputs:list, convdim_dec_outputs:list, kernels_enc:list, strides_enc:list, kernels_dec:list, strides_dec:list):
-        
-        super(AExonet,self).__init__()
-        
-        self.convdim_enc = convdim_enc_outputs
-        self.convdim_dec = convdim_dec_outputs
-        self.kernels_enc = kernels_enc
-        self.strides_enc = strides_enc
-        self.kernels_dec = kernels_dec
-        self.strides_dec = strides_dec
-        self.C           = 8 
+    def __init__(self, model, train_dataloader, args, EPOCH=2000):
 
+        self.model            = model
+        self.train_dataloader = train_dataloader
+        self.EPOCHS           = EPOCH
+        self.args             = args
 
         self.l1_loss     = nn.L1Loss()
         self.l2_loss     = nn.MSELoss()
 
+        self.recons_loss = self.l1_loss if self.args.loss_type == 'l1' else self.l2_loss
 
-        self.recons_loss = self.l1_loss if args.loss_type == 'l1' else self.l2_loss
-        self.args        = args
-        
-        self.encoder  = nn.Sequential(
-                        
-            nn.Conv2d(in_channels=1, out_channels=self.C, stride=self.strides_enc[0], kernel_size=self.kernels_enc[0]), #1
-            nn.BatchNorm2d(self.C),
-            nn.LeakyReLU(),
-            
-            nn.Conv2d(in_channels=self.C, out_channels=self.C*2, stride=self.strides_enc[1], kernel_size=self.kernels_enc[1]), #2
-            nn.BatchNorm2d(self.C*2),
-            nn.LeakyReLU(),
-            
-            nn.Conv2d(in_channels=self.C*2, out_channels=self.C*2, stride=self.strides_enc[2], kernel_size=self.kernels_enc[2]), #3
-            nn.BatchNorm2d(self.C*2),
-            nn.LeakyReLU(),
-            
-            nn.Conv2d(in_channels=self.C*2, out_channels=self.C*2, stride=self.strides_enc[3], kernel_size=self.kernels_enc[3]), #4 
-            nn.BatchNorm2d(self.C*2),
-            nn.LeakyReLU(),
-            
-            nn.Conv2d(in_channels=self.C*2, out_channels=self.C*4, stride=self.strides_enc[4], kernel_size=self.kernels_enc[4]), #5
-            nn.BatchNorm2d(self.C*4),
-            nn.LeakyReLU(),
-            
-            nn.Conv2d(in_channels=self.C*4, out_channels=self.C*8, stride=self.strides_enc[5], kernel_size=self.kernels_enc[5]), #6
-            nn.BatchNorm2d(self.C*8),
-            nn.LeakyReLU(),
-            
-            nn.Conv2d(in_channels=self.C*8, out_channels=self.C*16, stride=self.strides_enc[6], kernel_size=self.kernels_enc[6]), #7
-            nn.BatchNorm2d(self.C*16),
-            nn.LeakyReLU(),
-            
-        
-        ) 
-        
-        self.fc1 = nn.Sequential(
-        
-                nn.Linear((self.C*16)*self.convdim_enc[-1]**2,4096),
-                nn.SiLU(),
-                nn.Linear(4096,2048),
-                nn.SiLU(),
-                nn.Linear(2048,1024),
-                nn.SiLU(),
-        )
-
-        self.latent = nn.Linear(1024,1024)
-
-        self.fc2   = nn.Sequential(
-
-                nn.Linear(1024,2048),
-                nn.SiLU(),
-                nn.Linear(2048,4096),
-                nn.SiLU(),
-                nn.Linear(4096,(self.C*16)*self.convdim_enc[-1]**2),
-                nn.SiLU(),
-
-        )
-
-        self.decoder = nn.Sequential(
-
-                        
-            nn.ConvTranspose2d(in_channels=self.C*16, out_channels=self.C*8, stride=self.strides_dec[0], kernel_size=self.kernels_dec[0]), #1
-            nn.BatchNorm2d(self.C*8),
-            nn.SiLU(),
-            
-            nn.ConvTranspose2d(in_channels=self.C*8, out_channels=self.C*4, stride=self.strides_dec[1], kernel_size=self.kernels_dec[1]), #2
-            nn.BatchNorm2d(self.C*4),
-            nn.SiLU(),
-            
-            nn.ConvTranspose2d(in_channels=self.C*4, out_channels=self.C*2, stride=self.strides_dec[2], kernel_size=self.kernels_dec[2]), #3
-            nn.BatchNorm2d(self.C*2),
-            nn.SiLU(),
-            
-            nn.ConvTranspose2d(in_channels=self.C*2, out_channels=self.C*2, stride=self.strides_dec[3], kernel_size=self.kernels_dec[3]), #4 
-            nn.BatchNorm2d(self.C*2),
-            nn.SiLU(),
-            
-            nn.ConvTranspose2d(in_channels=self.C*2, out_channels=self.C, stride=self.strides_dec[4], kernel_size=self.kernels_dec[4]), #5
-            nn.BatchNorm2d(self.C),
-            nn.SiLU(),
-            
-            nn.ConvTranspose2d(in_channels=self.C, out_channels=self.C, stride=self.strides_dec[5], kernel_size=self.kernels_dec[5]), #6
-            nn.BatchNorm2d(self.C),
-            nn.SiLU(),
-            
-            nn.ConvTranspose2d(in_channels=self.C, out_channels=1, stride=self.strides_dec[6], kernel_size=self.kernels_dec[6]), #7
-            nn.BatchNorm2d(1),
-            nn.SiLU(),
-            
-        ) 
-        
-    def forward(self,x):
-        
-        bs       = x.size(0)
-
-        x       = self.encoder(x)
-        x       = x.view(x.size(0),-1)
-
-        x       = self.fc1(x)
-        latents = self.latent(x)
-        x       = self.fc2(latents)
-
-        x       = x.view(bs,self.C*16,self.convdim_enc[-1],self.convdim_enc[-1])
-        x       = self.decoder(x)
-        
-        return x
-    
-    def train_model(self, model, train_dataloader, EPOCH=800):
-
-        save_path = os.path.join(PLOTS_SAVE_PATH, f'training_results', str(self.args.idx))
-        save_dict_as_yaml((self.args), os.path.join(PLOTS_SAVE_PATH, 'args.yml'))
-
-        if not os.path.exists(save_path):
-            os.makedirs(save_path)
-            
-        model.train()
-        model = model.to(self.args.device)
-
+    def set_optimizer(self, model):
+                
         adam_optim = torch.optim.Adam(model.parameters(), lr=self.args.lr)  
         sgd_optim  = torch.optim.SGD(model.parameters(), lr=self.args.lr)
 
         optimizer  = sgd_optim if self.args.optim == 'sgd' else adam_optim 
 
-        total_loss = 0
+        return optimizer
 
-        with tqdm(total=len(train_dataloader)*EPOCH) as tt:
+    def set_save_dir(self):
 
-            for epoch in tqdm(range(EPOCH)):
+        save_path = os.path.join(PLOTS_SAVE_PATH, f'training_results', str(self.args.idx))
+        
+        if not os.path.exists(save_path):
+            os.makedirs(save_path)
+    
+        save_dict_as_yaml((self.args), os.path.join(save_path, 'args.yml'))
+    
+        return save_path
+
+    def set_initials(self):
                 
-                batch_loss = 0
-            
-                for idx, batch in enumerate(train_dataloader):
-                    
-                    batch = batch.float().to(self.args.device)
-                    
-                    recons = model(batch)
+        save_path = self.set_save_dir()
 
-                    loss = self.recons_loss(recons,batch)
+        # Set self.model    
+        model = self.model
+        model = model.train()
+        model = model.to(self.args.device)
+
+        optimizer = self.set_optimizer(model)
+
+        return model, optimizer, save_path
+
+
+    def train_VAE(self):
+
+        model, optimizer, save_path = self.set_initials()
+
+        if self.args.scheduler:
+            scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=30, gamma=0.98)
+                
+        with tqdm(total=len(self.train_dataloader)*self.EPOCHS) as tt:
+            
+            for epoch in tqdm(range(self.EPOCHS)):
+
+                epoch_dict = defaultdict(lambda:0.0)
+                print(f'Epoch {epoch} starts.')
+                mu_log = 0
+                log_var_log = 0
+                for idx, (batch, _, filtered_batch, img_paths) in enumerate(self.train_dataloader):
                     
+                    batch_dict = defaultdict(lambda:0.0)
+                    batch_dict['epoch'] = epoch
+                    batcht = batch
+                    
+                    # Batches to device
+                    if self.args.apply_lowpass:
+                        batch = filtered_batch.float().to(self.args.device)
+
+                    else:
+                        batch = batch.float().to(self.args.device)
+                   
+
+                    recons, z, mu, log_var = model(batch)
+            
+                    # Compute Loss
+                    loss_dict = model.loss_function(recons, filtered_batch, mu, log_var)
+                    loss = loss_dict['loss']
+                    recons_loss = loss_dict['recons_loss']
+                    kld_loss    = loss_dict['kld']
+                    
+                    # Back Prop
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
 
-                    batch_loss += loss.item()
+                    if self.args.model != 'ae':
+                        mu_log  +=  torch.norm(mu)
+                        log_var_log  +=  torch.norm(log_var)
+                        batch_dict['loss/kld_loss'] += kld_loss.item() 
                     
+                    batch_dict['loss/batch_loss'] += loss.item() 
+                    batch_dict['loss/recons_loss'] += recons_loss.item() 
+                        
 
-                    wandb.log({
-                        "batch_loss":batch_loss
-                    })
+                    print(f"Epoch {epoch}/{self.EPOCHS}  Batch {idx}/{len(self.train_dataloader)}")
 
-                    print(f'{batch_loss}')
+                    if self.args.wandb:
+                        wandb.log(batch_dict)
+
                     if idx % 150 == 0:
-                        plot_results(batch, recons, save_path, epoch, idx)
+                        if self.args.apply_lowpass:
+                            plot_results(batcht, recons, filtered_batch, save_path, epoch, idx, img_paths)
+                        else:
+                            plot_results(batcht, recons, save_path, epoch, idx, img_paths)
+                
+                if self.args.model != 'ae':
+                    epoch_dict['latent/mu'] = mu_log/idx
+                    epoch_dict['latent/log_var'] = log_var_log/idx
 
-                total_loss += batch_loss
+                epoch_dict['loss/epoch_loss'] = batch_dict['loss/batch_loss'] / (idx)
+                print(f"Epoch {epoch}/{self.EPOCHS}  Loss:{epoch_dict['loss/epoch_loss']}")
 
-                if (epoch+1) % 30 == 0:
+
+                if (epoch+1) % 20 == 0:
                         torch.save(model, os.path.join(save_path,f'model_epoch-{epoch}.pt'))
 
-                total_loss = batch_loss / idx
-                print('Epoch:',epoch)
-                wandb.log({
-                        "total_loss": total_loss
-                })
+                if self.args.wandb:
+                    wandb.log(epoch_dict)
+    
+                if self.args.scheduler:
+                    scheduler.step()
 
+    
 
-class VAExonet(nn.Module):
+class VAE(nn.Module):
+    
+    def __init__(self, 
+                 args, 
+                 in_channels:int,
+                 latent_dim:int,
+                 convdim_enc_outputs:list, 
+                 kernels:list, 
+                 strides:list, 
+                 hidden_dims:list = None):
         
-    def __init__(self, args, convdim_enc_outputs:list, convdim_dec_outputs:list, kernels_enc:list, strides_enc:list, kernels_dec:list, strides_dec:list):
-        
-        super(VAExonet,self).__init__()
+        super(VAE,self).__init__()
         
         self.convdim_enc = convdim_enc_outputs
-        self.convdim_dec = convdim_dec_outputs
-        self.kernels_enc = kernels_enc
-        self.strides_enc = strides_enc
-        self.kernels_dec = kernels_dec
-        self.strides_dec = strides_dec
-        self.C           = 8 
+        self.kernels     = kernels
+        self.strides     = strides
+        self.hidden_dims = hidden_dims
+        self.latent_dim  = latent_dim
+        self.in_channels = in_channels 
+        self.args        = args
 
-        self.l1_loss     = nn.L1Loss()
-        self.l2_loss     = nn.MSELoss()
-        self.recons_loss = self.l1_loss if args.loss_type == 'l1' else self.l2_loss
-        
-
-        self.args = args
+        if self.hidden_dims is None:
+            self.hidden_dims = [2**(i+4) for i in range(len(kernels))]
 
         
-        self.encoder  = nn.Sequential(
-                        
-            nn.Conv2d(in_channels=1, out_channels=self.C, stride=self.strides_enc[0], kernel_size=self.kernels_enc[0]), #1
-            nn.BatchNorm2d(self.C),
-            nn.LeakyReLU(),
+        #Encoder
+        modules = []
+        for idx in range(len(self.hidden_dims)):
+
+            modules.append(
+                nn.Sequential(
+                    nn.Conv2d(in_channels=self.in_channels,
+                              out_channels=self.hidden_dims[idx],
+                              kernel_size=self.kernels[idx],
+                              stride=self.strides[idx],
+                              padding = 1),
+                    nn.BatchNorm2d(self.hidden_dims[idx]),
+                    nn.LeakyReLU()))
             
-            nn.Conv2d(in_channels=self.C, out_channels=self.C*2, stride=self.strides_enc[1], kernel_size=self.kernels_enc[1]), #2
-            nn.BatchNorm2d(self.C*2),
-            nn.LeakyReLU(),
-            
-            nn.Conv2d(in_channels=self.C*2, out_channels=self.C*2, stride=self.strides_enc[2], kernel_size=self.kernels_enc[2]), #3
-            nn.BatchNorm2d(self.C*2),
-            nn.LeakyReLU(),
-            
-            nn.Conv2d(in_channels=self.C*2, out_channels=self.C*2, stride=self.strides_enc[3], kernel_size=self.kernels_enc[3]), #4 
-            nn.BatchNorm2d(self.C*2),
-            nn.LeakyReLU(),
-            
-            nn.Conv2d(in_channels=self.C*2, out_channels=self.C*4, stride=self.strides_enc[4], kernel_size=self.kernels_enc[4]), #5
-            nn.BatchNorm2d(self.C*4),
-            nn.LeakyReLU(),
-            
-            nn.Conv2d(in_channels=self.C*4, out_channels=self.C*8, stride=self.strides_enc[5], kernel_size=self.kernels_enc[5]), #6
-            nn.BatchNorm2d(self.C*8),
-            nn.LeakyReLU(),
-            
-            nn.Conv2d(in_channels=self.C*8, out_channels=self.C*16, stride=self.strides_enc[6], kernel_size=self.kernels_enc[6]), #7
-            nn.BatchNorm2d(self.C*16),
-            nn.LeakyReLU(),
-            
+            self.in_channels = self.hidden_dims[idx]
+
+        self.encoder = nn.Sequential(*modules)
+
+        #Latent
+        if self.args.model == 'ae':
+
+            self.fc_latent = nn.Linear((self.hidden_dims[-1])*self.convdim_enc[-1]**2, self.latent_dim)
+            self.decoder_input = nn.Linear(self.latent_dim, (self.hidden_dims[-1])*self.convdim_enc[-1]**2)
+
+
+        else:
+            self.fc_mu = nn.Linear((self.hidden_dims[-1])*self.convdim_enc[-1]**2, self.latent_dim)
+            self.fc_var = nn.Linear((self.hidden_dims[-1])*self.convdim_enc[-1]**2, self.latent_dim)
+            self.decoder_input = nn.Linear(self.latent_dim, (self.hidden_dims[-1])*self.convdim_enc[-1]**2)
+
+
+        #Decoder
+        modules = []
+        self.hidden_dims.reverse()
+        self.kernels.reverse()
+        self.strides.reverse()
         
-        ) 
-        
-        self.fc1 = nn.Sequential(
-        
-                nn.Linear((self.C*16)*self.convdim_enc[-1]**2,4096),
-                nn.SiLU(),
-                nn.Linear(4096,2048),
-                nn.SiLU(),
-                nn.Linear(2048,1024),
-                nn.SiLU(),
-        )
+
+        for i in range(len(self.hidden_dims) - 1):
+            modules.append(
+                nn.Sequential(
+                    nn.ConvTranspose2d(self.hidden_dims[i],
+                                       self.hidden_dims[i + 1],
+                                       kernel_size=self.kernels[i],
+                                       stride=self.strides[i],
+                                       padding=1,
+                                       output_padding= 0 if strides[i]== 1 else 1),
+                    nn.BatchNorm2d(self.hidden_dims[i + 1]),
+                    nn.LeakyReLU())
+            )
+
+        self.decoder = nn.Sequential(*modules)
 
 
-        self.sigma  = nn.Linear(1024,1024)
-        self.mu     = nn.Linear(1024,1024)
-        self.latent = nn.Linear(1024,1024)
-
-        self.fc2   = nn.Sequential(
-
-                nn.Linear(1024,2048),
-                nn.SiLU(),
-                nn.Linear(2048,4096),
-                nn.SiLU(),
-                nn.Linear(4096,(self.C*16)*self.convdim_enc[-1]**2),
-                nn.SiLU(),
-
-        )
-
-        self.decoder = nn.Sequential(
-
-                        
-            nn.ConvTranspose2d(in_channels=self.C*16, out_channels=self.C*8, stride=self.strides_dec[0], kernel_size=self.kernels_dec[0]), #1
-            nn.BatchNorm2d(self.C*8),
-            nn.SiLU(),
-            
-            nn.ConvTranspose2d(in_channels=self.C*8, out_channels=self.C*4, stride=self.strides_dec[1], kernel_size=self.kernels_dec[1]), #2
-            nn.BatchNorm2d(self.C*4),
-            nn.SiLU(),
-            
-            nn.ConvTranspose2d(in_channels=self.C*4, out_channels=self.C*2, stride=self.strides_dec[2], kernel_size=self.kernels_dec[2]), #3
-            nn.BatchNorm2d(self.C*2),
-            nn.SiLU(),
-            
-            nn.ConvTranspose2d(in_channels=self.C*2, out_channels=self.C*2, stride=self.strides_dec[3], kernel_size=self.kernels_dec[3]), #4 
-            nn.BatchNorm2d(self.C*2),
-            nn.SiLU(),
-            
-            nn.ConvTranspose2d(in_channels=self.C*2, out_channels=self.C, stride=self.strides_dec[4], kernel_size=self.kernels_dec[4]), #5
-            nn.BatchNorm2d(self.C),
-            nn.SiLU(),
-            
-            nn.ConvTranspose2d(in_channels=self.C, out_channels=self.C, stride=self.strides_dec[5], kernel_size=self.kernels_dec[5]), #6
-            nn.BatchNorm2d(self.C),
-            nn.SiLU(),
-            
-            nn.ConvTranspose2d(in_channels=self.C, out_channels=1, stride=self.strides_dec[6], kernel_size=self.kernels_dec[6]), #7
-            nn.BatchNorm2d(1),
-            nn.SiLU(),
-            
-        ) 
-        
-    def forward(self,x):
-        
-        bs       = x.size(0)
-
-        #ENCODER
-        x       = self.encoder(x.float())
-        x       = x.view(x.size(0),-1)
-        x       = self.fc1(x)
-
-        #LATENTS
-        z_mean, z_logvar = self.mu(x), self.sigma(x)
-        encoded = self.reparametrization(z_mean, z_logvar)
-        latents = self.latent(encoded)
-
-        #DECODER
-        x       = self.fc2(latents)
-        x       = x.view(bs,self.C*16,self.convdim_enc[-1],self.convdim_enc[-1])
-        decoded       = self.decoder(x)
-
-        return decoded, encoded, z_mean, z_logvar
+        self.final_layer = nn.Sequential(
+                            nn.ConvTranspose2d(self.hidden_dims[-1],
+                                               1,#self.hidden_dims[-1],
+                                               kernel_size=kernels[-1],
+                                               stride=strides[-1],
+                                               padding=1,
+                                               output_padding=1),
+                            #nn.BatchNorm2d(self.hidden_dims[-1]),
+                            # nn.LeakyReLU(),
+                            # nn.Conv2d(in_channels = self.hidden_dims[-1], 
+                            #           out_channels= self.hidden_dims[-1],
+                            #           kernel_size= 3, 
+                            #           padding= 0),
+                            # nn.BatchNorm2d(self.hidden_dims[-1]),
+                            # nn.LeakyReLU(),
+                            # nn.Conv2d(in_channels = self.hidden_dims[-1], 
+                            #           out_channels= in_channels,
+                            #           kernel_size= 3, 
+                            #           padding= 0),
+                            nn.Tanh())
     
 
-    def loss_fn(self, decoded, batch, z_mean, z_logvar):
+    def encode(self, input):
+
+        result = self.encoder(input)
+        result = result.view(result.size(0),-1)
+
+        if self.args.model =='ae':
+
+            z = self.fc_latent(result)
+
+            return z
         
+        else:
 
-        recons = self.recons_loss(decoded,  batch)
-        kl     = -0.5 * torch.sum(1 + z_logvar - z_mean.pow(2) - z_logvar.exp())
+            mu = self.fc_mu(result)
+            log_var = self.fc_var(result)
 
-        total_loss = recons + kl
-
-        return total_loss
+            return [mu, log_var]
     
-    def reparametrization(self, z_mean, z_logvar):
+    def decode(self, z, *args):
+        
+        bs     = args[0]
+        result = self.decoder_input(z)
+        result = result.view(bs, self.hidden_dims[0], self.convdim_enc[-1], self.convdim_enc[-1])
+        result = self.decoder(result)
+        result = self.final_layer(result)
 
-        eps = torch.randn(z_mean.size(0), z_mean.size(1)).to(self.args.device)
+        return result
+    
+    def reparameterize(self, mu, logvar):
 
-        z   = z_mean + torch.exp(z_logvar/2) * eps
+        std = torch.exp(0.5 * logvar)
+        eps = torch.randn_like(std)
 
-        return z
+        return eps * std + mu
+        
+    def forward(self, input, mu=None, log_var=None):
 
-    def train_model(self, model, train_dataloader, EPOCH=800):
+        bs          = input.size(0)
 
-        save_path = os.path.join(PLOTS_SAVE_PATH, f'training_results', str(self.args.idx))
+        if self.args.model == 'ae':
+
+            z = self.encode(input)
+
+        else:
+
+            mu, log_var = self.encode(input)
+            z           = self.reparameterize(mu, log_var)
+
+        recons      = self.decode(z, bs)
+
+        return [recons, z, mu, log_var]
+
+    def loss_function(self,
+                    *args):
+
+        recons = args[0]
+        input = args[1]
+        mu = args[2]
+        log_var = args[3]
+
+        kld_weight = 0 if self.args.model == 'ae' else self.args.kld_weight
+
+        recons_loss = F.mse_loss(recons, input)
+
+        kld_loss = 0 if self.args.model == 'ae' else torch.mean(-0.5 * torch.sum(1 + log_var - mu ** 2 - log_var.exp(), dim = 1), dim = 0)
+
+        loss = recons_loss + kld_weight * kld_loss
+
+        return {'loss': loss, 'recons_loss':recons_loss.detach(), 'kld': 0 if self.args.model == 'ae' else -kld_loss.detach()}
+    
+
+
+class ExoClassifier(nn.Module):
+    
+    def __init__(self,
+                 args, 
+                 in_channels:int,
+                 latent_dim:int,
+                 convdim_enc_outputs:list, 
+                 kernels:list, 
+                 strides:list,
+                 hidden_dims:list = None):
+        
+        super(ExoClassifier,self).__init__()
+        
+        self.convdim_enc = convdim_enc_outputs
+        self.kernels     = kernels
+        self.strides     = strides
+        self.latent_dim  = latent_dim
+        self.hidden_dims = hidden_dims
+        self.in_channels = in_channels 
+        self.args        = args
+
+        if self.hidden_dims is None:
+            self.hidden_dims = [2**(i+4) for i in range(len(kernels))]
+
+        
+        #Encoder
+        modules = []
+        for idx in range(len(self.hidden_dims)):
+
+            modules.append(
+                nn.Sequential(
+                    nn.Conv2d(in_channels=self.in_channels,
+                              out_channels=self.hidden_dims[idx],
+                              kernel_size=self.kernels[idx],
+                              stride=self.strides[idx],
+                              padding = 1),
+                    nn.BatchNorm2d(self.hidden_dims[idx]),
+                    nn.LeakyReLU()))
+            
+            self.in_channels = self.hidden_dims[idx]
+
+        self.encoder = nn.Sequential(*modules)
+
+
+        fcs = []
+        fc_nodes = [2**(i*2) for i in reversed(range(1,6,2))]
+        nodes = (self.hidden_dims[-1])*self.convdim_enc[-1]**2
+
+        for idx in range(len(fc_nodes)):
+            fcs.append(nn.Sequential(
+                nn.Linear(nodes, fc_nodes[idx]),
+                nn.LeakyReLU()
+            ))
+            
+            nodes = fc_nodes[idx]
+
+        self.fc_layers = nn.Sequential(*fcs)
+
+        self.final_layer = nn.Linear(fc_nodes[-1],2)
+
+    def encode(self, input):
+
+        result = self.encoder(input)
+        result = result.view(result.size(0),-1)
+
+        return result
+
+    def forward(self, x):
+        
+        z = self.encode(x)
+        z = self.fc_layers(z)
+        z = self.final_layer(z)
+        output = F.log_softmax(z)
+
+        return output
+
+
+    def train_model(self, model, train_dataloader):
+
+
+        save_path = os.path.join(PLOTS_SAVE_PATH, f'training_results', str(self.args.idx), 'models')
         save_dict_as_yaml((self.args), os.path.join(PLOTS_SAVE_PATH, 'args.yml'))
 
         if not os.path.exists(save_path):
-            os.makedirs(save_path)
+           os.makedirs(save_path)
 
         model.train()
         model = model.to(self.args.device)
@@ -368,6 +412,7 @@ class VAExonet(nn.Module):
         sgd_optim  = torch.optim.SGD(model.parameters(), lr=self.args.lr)
 
         optimizer  = sgd_optim if self.args.optim == 'sgd' else adam_optim 
+        EPOCH = self.args.epoch
 
         with tqdm(total=len(train_dataloader)*EPOCH) as tt:
 
@@ -376,17 +421,21 @@ class VAExonet(nn.Module):
 
                 batch_loss = 0
 
-                for idx, batch in enumerate(train_dataloader):
+                for idx, (image, label, filtered_batch, _) in enumerate(train_dataloader):
                     
-                    batch = batch.to(self.args.device)
 
-                    decoded, encoded, z_mean, z_logvar = model(batch)
+                    if self.args.apply_lowpass:
+                        batch = filtered_batch.to(self.args.device).float()
 
-                    loss = self.loss_fn(decoded=decoded,
-                                        batch=batch,
-                                        z_mean=z_mean,
-                                        z_logvar=z_logvar)
+                    else:
+                        batch = image.to(self.args.device).float()
+
+                    label = label.type(torch.LongTensor).to(self.args.device)
+
+                    output = model(batch)
                     
+                    loss = F.nll_loss(output, label)
+
                     optimizer.zero_grad()
                     loss.backward()
                     optimizer.step()
@@ -396,13 +445,14 @@ class VAExonet(nn.Module):
 
 
                 batch_loss = batch_loss / (idx+1)
-                if idx % 150 == 0:
-                    plot_results(batch, decoded, save_path, epoch, idx)
+                
+                torch.save(model, os.path.join(save_path, f'model.pt'))
+
+                if idx % 300 == 0:
+                    plot_inputs_classifier(batch, save_path, epoch, idx)
 
                 total_loss += batch_loss
                 print('Batch_loss:', batch_loss) 
             
             total_loss = total_loss / epoch 
             print('Total_loss:', total_loss) 
-
-

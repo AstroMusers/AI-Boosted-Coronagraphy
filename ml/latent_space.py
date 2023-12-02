@@ -9,6 +9,15 @@ from convAE_train import InjectionDataset, set_device, DataLoader, Encoder
 import torch
 
 from tqdm import tqdm
+import sys
+sys.path.append(os.path.dirname(os.getcwd()))
+
+
+from util.util_data import *
+from util.util_dirs import *
+from util.util_train import *
+from ml.models import Exonet, VAExonet
+
 
 class LatentSpace():
     def __init__(self, encoder_dir, data_dir, batch_size, device) -> None:
@@ -32,9 +41,10 @@ class LatentSpace():
 
 
     def __get_encoder(self, encoder_dir):
-        with open(f'{encoder_dir}', 'rb') as fin:
-            encoder = pickle.load(fin).to(self.device)
-        
+
+        # with open(f'{encoder_dir}', 'rb') as fin:
+        #     encoder = pickle.load(fin).to(self.device)
+        encoder = torch.load(encoder_dir)
         return encoder
 
     def __create_latent(self, dataloader):
@@ -44,7 +54,7 @@ class LatentSpace():
             image_batch, label = data
             self.encoder.eval()
             with torch.no_grad():
-                latent = self.encoder(image_batch.to(self.device))
+                x, latent = self.encoder(image_batch.to(self.device))
                 latent = latent.cpu().numpy()
                 # add labels into latent one by one
                 for idx in range(latent.shape[0]):
@@ -60,11 +70,17 @@ if __name__ == '__main__':
     
     PROPOSAL_ID = '1386'
     INSTRUMENT = 'NIRCAM'
-    data_dir = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/injections/train/*.npy'
+    #data_dir = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/injections/train/*.npy'
+    
+    inj = glob.glob('/data/scratch/bariskurtkaya/dataset/NIRCAM/1386/injections2/fc1_coron_injections_train/*fc1.npy')[:128]
+    no_inj = glob.glob('/data/scratch/bariskurtkaya/dataset/NIRCAM/1386/injections2/fc1_coron_injections_train/*[!fc1].npy')[:128]
 
-    enc_epoch = 374
-    encoder_dir = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/models/modelv1/{enc_epoch}_enc.pickle'
+    train_paths = inj + no_inj
 
+    #enc_epoch = 374
+    #encoder_dir = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/models/modelv1/{enc_epoch}_enc.pickle'
+
+    encoder_dir  = "/data/scratch/sarperyurtseven/results/plots/training_results/coron_injections_ae/0/model_epoch-29.pt"
     batch_size = 2048
     device = set_device(3)
 

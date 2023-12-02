@@ -10,6 +10,8 @@ from astropy.wcs import WCS
 import math
 
 
+### HElPER functions to visualize fits files
+
 
 def get_lower_products(suffix,directory):
     return glob(os.path.join(directory, f'**/*{suffix}.fits'))
@@ -56,7 +58,7 @@ def pixel_to_arcsec_nircam(axis_length,wavelength):
         arcsec_axis_points.append(pos_current_point)
         arcsec_axis_points.append(neg_current_point)
         
-def get_hdu(fits_,data):
+def get_hdu(fits_, product):
     
     pri_data = []
     sci_data = []
@@ -65,10 +67,10 @@ def get_hdu(fits_,data):
     con_data = []
     wht_data = []
 
-    for i,path in enumerate(fits_):
+    for i, path in enumerate(fits_):
         fits_file = fits.open(path)
         
-        if data == 'psf':
+        if product == 'psf':
             pri = fits_file[0].header
             sci = fits_file[1].data
             dq  = fits_file[2].data 
@@ -76,7 +78,7 @@ def get_hdu(fits_,data):
             
             dq_data.append(dq)
             
-        elif data == 'i2d':
+        elif product == 'i2d':
             
             pri = fits_file[0].header
             sci = fits_file[1].data
@@ -87,7 +89,7 @@ def get_hdu(fits_,data):
             con_data.append(con)
             wht_data.append(wht)
             
-        elif data == 'psfsub':
+        elif product == 'psfsub':
             
             pri = fits_file[0].header
             sci = fits_file[1].data
@@ -101,7 +103,7 @@ def get_hdu(fits_,data):
         err_data.append(err)
 
         
-    return pri_data,sci_data,err_data,dq_data,con_data,wht_data
+    return pri_data, sci_data, err_data, dq_data, con_data, wht_data
 
 
 def get_sci(fits_):
@@ -140,7 +142,7 @@ def pixel2wcs(fits_,ispsf=False):
 
 def RA2time(degree):
     
-    if isinstance(degree,np.ndarray):
+    if isinstance(degree, np.ndarray):
         time_list = []
         
         for i in degree:
@@ -156,7 +158,7 @@ def RA2time(degree):
         return time_list
             
         
-    elif isinstance(degree,np.float64):
+    elif isinstance(degree, np.float64):
         
         hour_frac, hour = math.modf(i/15)
         min_frac, minute = math.modf(hour_frac*60)
@@ -290,8 +292,6 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
     x_labelish = [str(round(x_label,3)) for x_label in w[1]]
     x_labels = create_declination_labels(x_labelish)
     
-    #y_labels, x_labels = get_axis_labels(w)
-
     for data in range(len(psfstack)):
         
         if instrume[data] == 'NIRCAM':
@@ -299,15 +299,6 @@ def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program
         
         elif instrume[data] == 'MIRI':
             _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(28,8))
-        
-        # y_axis_arcsec = [y for y in np.sort(pixel_to_arcsec_nircam(320,wavelength=filtrs[data]))]
-            
-        # negative = [-x for x in range((len(y_axis_arcsec)//2)+1)]
-        # positive = [ x for x in range((len(y_axis_arcsec)//2)+1)]
-        # arcsec_labels = negative + positive
-        # arcsec_labels = arcsec_labels[1:]
-        # arcsec_labels.sort()
-
 
         for psf,(row,col) in enumerate(itertools.product(range(nrow),range(ncol))):
             

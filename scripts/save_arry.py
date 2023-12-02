@@ -8,7 +8,11 @@ from jwst import datamodels
 import math
 import PIL
 from IPython.display import display
-from scripts.visualization_helpers import get_headers
+from visualization_helpers import get_headers
+
+
+### SAVE ANY FITS FILEs SCI as numpy array
+
 
 def get_hdu(fits_,data):
     
@@ -85,7 +89,9 @@ def get_hdu_data(fits_dirs,suffix):
     
     return hdu_dict
 
-
+def normalize(img):
+    return (img - img.min()) / (img.max() - img.min())
+    
 def save_hdu_data(hdu_dict,instrume,proposal_id,file_name,hdu,header):
     
     filters = get_headers(header,'FILTER')
@@ -100,24 +106,30 @@ def save_hdu_data(hdu_dict,instrume,proposal_id,file_name,hdu,header):
     for i,d in enumerate(data):
         
         save_name = file_name[i].split('/')[-1][:-5]
-        #np.save(os.path.join(DIR,f'{proposal_id}_{filters[i]}_{targets[i]}_{suffix}_{hdu}_{i}.npy'),d)
         npsf = d.shape[0]
         for j in range(npsf):
-            im = PIL.Image.fromarray(d[j])
-            im = im.convert("L")
-            im.save(os.path.join(DIR, save_name + f'_{hdu}_{j}.jpg'))
+            
+            psf = d[j]
+            psf = normalize(psf)
+
+            size    = 80
+            psf_res = (320 - size) // 2
+
+            psf = psf[psf_res:psf_res + size, psf_res:psf_res + size]
+
+            np.save(os.path.join(DIR, save_name + f'_{hdu}_{j}'), psf)
+
 
 
 
 INSTRUME = 'NIRCAM'
-PROPOSAL_ID = '1386'
+PROPOSAL_ID = '1441'
 
-directory_1386_nircam = f'/data/scratch/bariskurtkaya/dataset/NIRCAM/{PROPOSAL_ID}/mastDownload/JWST'
+directory_nircam = f'/data/scratch/bariskurtkaya/dataset/NIRCAM/{PROPOSAL_ID}/mastDownload/JWST'
 
-psfstacks_nircam_1386 = get_stage3_products(suffix='psfstack',directory=directory_1386_nircam)
+psfstacks_nircam = get_stage3_products(suffix='psfstack',directory=directory_nircam)
 
-#print(psfstacks_nircam_1386[0].split('/')[-1][:-5])
-header,sci,err,dq,con,wht = get_hdu(psfstacks_nircam_1386,data='psf')
+header,sci,err,dq,con,wht = get_hdu(psfstacks_nircam,data='psf')
 
-hdu_dict = get_hdu_data(psfstacks_nircam_1386,suffix='psfstack')
-save_hdu_data(hdu_dict,INSTRUME,PROPOSAL_ID,psfstacks_nircam_1386,'sci',header)
+hdu_dict = get_hdu_data(psfstacks_nircam,suffix='psfstack')
+save_hdu_data(hdu_dict, INSTRUME, PROPOSAL_ID, psfstacks_nircam, 'sci', header)
