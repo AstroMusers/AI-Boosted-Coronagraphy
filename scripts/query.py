@@ -104,7 +104,7 @@ if __name__ == "__main__":
     #                            '1412', '1441', '1482', '1536', '1537', '1538', '2183', '2278', '2635', '4454']
 
     #proposal_ids: List[str] = ['1386']
-    proposal_ids = ['1386']
+    proposal_ids = ['2278']
 
     instrume: str = 'NIRCAM'
 

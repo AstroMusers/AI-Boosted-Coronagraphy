@@ -61,6 +61,7 @@ def process_products(programs:list):
 
         directory = f'/data/scratch/sarperyurtseven/dataset/{INSTRUME}/{program}/mastDownload/JWST/'
         rateints_files = glob(os.path.join(directory, '*/*rateints.fits'))
+        print("#RATEINTS:",len(rateints_files))
         batch_size = 4
 
         for i in range(0,len(rateints_files),batch_size):
@@ -73,8 +74,9 @@ def process_products(programs:list):
             
             
         calints_data = glob(os.path.join(directory, '**/**calints.fits'))
-        print(len(calints_data))
+        print("#CALINTS:",len(calints_data))
         pool = mkpool(calints_data)
+        print("#Pool Length:",len(pool))
         pool_df = pool.to_pandas()
         pool_df.to_csv(f'calints_{INSTRUME}_{program}_pool.csv',index=False)
 
@@ -87,7 +89,7 @@ def process_products(programs:list):
         get_stage3_products(asns,directory)
 
 
-programs = ['1386']
+programs = ['2278']
 
 process_products(programs)
 

@@ -68,10 +68,11 @@ class Injection():
 
             detector = self.psfstacks[filter_key][0].header['DETECTOR']
             filter = self.psfstacks[filter_key][0].header['FILTER']
+
             # coron_mask = self.psfstacks[filter_key][0].header['CORONMSK']
             # pupil_mask = self.psfstacks[filter_key][0].header['PUPIL'] #coron_mask=coron_mask, pupil_mask=pupil_mask,
 
-            generated_psf = self.__generate_psf_model(detector=detector, filter=filter,  fov=fov*2, save=True)#fov*2
+            generated_psf = self.__generate_psf_model(detector=detector, filter=filter,  fov=fov*2, save=True)
 
             if self.psfstacks[filter_key][0].header['CHANNEL'] == 'LONG':
                 generated_psf_selection = 1
@@ -87,8 +88,8 @@ class Injection():
                 psf = psf[psf_res:psf_res + size, psf_res:psf_res + size]
                 norm_psf  = psf
 
-                filename = f'{"/".join(self.psf_directory.split("/")[:-3])}/injections2/{inject_filename}/{filter_key}-psf{psf_idx}'
-                os.makedirs(os.path.join("/".join(self.psf_directory.split("/")[:-3]), f'injections2/{inject_filename}'), exist_ok=True)
+                filename = f'{"/".join(self.psf_directory.split("/")[:-3])}/injections/{inject_filename}/{filter_key}-psf{psf_idx}'
+                os.makedirs(os.path.join("/".join(self.psf_directory.split("/")[:-3]), f'injections/{inject_filename}'), exist_ok=True)
 
                 if self.is_save_original:
                     self.__save_psf_to_npy(
@@ -229,7 +230,7 @@ class Injection():
     def __nan_elimination(self, psf):
         return np.nan_to_num(psf)
 
-    def __generate_psf_model(self, detector:str, filter:str, fov:float, coron_mask:str=None, pupil_mask:str=None, save:bool=True):
+    def __generate_psf_model(self, detector:str, filter:str, fov:float, coron_mask:str='', pupil_mask:str='', save:bool=True):
         
         if detector == 'NRCALONG':
             detector = 'NRCA5'
@@ -255,9 +256,9 @@ class Injection():
             time_start = time()
             wpsf.detector   = detector
             wpsf.filter     = filter
-            if coron_mask is not None:
+            if coron_mask != '':
                 wpsf.image_mask = coron_mask.replace('MASKA','MASK')
-            if pupil_mask is not None:
+            if pupil_mask != '':
                 wpsf.pupil_mask = pupil_mask
 
             if save:
@@ -386,10 +387,10 @@ if __name__ == '__main__':
     injection = Injection(psf_directory=psf_directory, is_save_original=is_save_original, is_save_augmented=is_save_augmented, is_save_injected=is_save_injected)
 
     injection_count = 2
-    aug_count = 150
-    flux_coefficients = [10]
+    aug_count = 50
+    flux_coefficients = [1]
     normalize_psf = True
-    filename = f'fc{flux_coefficients[0]}_nocoron_injections_test'
+    filename = f'fc{flux_coefficients[0]}_injections_train'
 
     injection.apply_injection(injection_count=injection_count, aug_count=aug_count, inject_filename=filename, normalize_psf=normalize_psf, flux_coefficients=flux_coefficients)
 

@@ -4,7 +4,6 @@ import os
 from glob import glob
 import time
 import sys
-
 import pandas as pd
 
 import astropy.io.fits as fits
@@ -21,11 +20,14 @@ from ..util.util_main import get_dataset_dir, get_main_dir
 from ..util.util_type import INSTRUME
 
 
+
+
+
 class CoronPipeline():
     def __init__(self, proposal_id: str, instrume: INSTRUME):
         print(
             f"coron_pipeline.py script activated. Current JWST Version: {jwst.__version__}")
-        os.environ["CRDS_PATH"] = '/home/bariskurtkaya/crds_cache/jwst_ops'
+        os.environ["CRDS_PATH"] = '/home/sarperyn/crds_cache/jwst_ops'
         os.environ["CRDS_SERVER_URL"] = 'https://jwst-crds.stsci.edu'
 
         self.instrume = instrume

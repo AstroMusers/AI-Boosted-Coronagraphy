@@ -1,5 +1,7 @@
 import os
 
+INSTRUME = "NIRCAM"
+
 
 def get_mast_token():
     main_dir = get_main_dir()

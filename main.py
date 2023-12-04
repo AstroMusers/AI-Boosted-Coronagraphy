@@ -10,7 +10,7 @@ def test_query():
     keywords: query_keywords = {
                 'exp_type':['NRC_CORON'],
                 'instrume':['NIRCAM'],
-                'date_obs_mjd': ['2022-01-01','2022-12-01'],
+                'date_obs_mjd': ['2022-01-01','2023-12-01'],
                 }
 
     proposal_id: str = '1441'
