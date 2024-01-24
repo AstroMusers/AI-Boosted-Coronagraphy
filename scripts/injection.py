@@ -1,17 +1,14 @@
 import os
-
-if not os.environ.get('WEBBPSF_PATH'):
-    os.environ['WEBBPSF_PATH'] = '/data/webbpsf-data'
-
-import sys
-sys.path.append("..")
-
+import numpy as np
 from glob import glob
-
+from time import time
+from augmentation import Augmentation
+from tqdm import tqdm
 import warnings
 import math
-
 import webbpsf
+import sys
+sys.path.append("..")
 
 from astropy.io import fits
 import astropy.units as u
@@ -20,16 +17,12 @@ from astroquery.gaia import Gaia
 from astroquery.ipac.nexsci.nasa_exoplanet_archive import NasaExoplanetArchive
 from astropy.utils.exceptions import AstropyWarning
 
+if not os.environ.get('WEBBPSF_PATH'):
+    os.environ['WEBBPSF_PATH'] = '/data/webbpsf-data'
+
 from util.util_main import get_filename_from_dir, get_dataset_dir
 from scripts.visualization_helpers import get_stage3_products
 
-import numpy as np
-
-from time import time
-
-from augmentation import Augmentation
-
-from tqdm import tqdm
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 

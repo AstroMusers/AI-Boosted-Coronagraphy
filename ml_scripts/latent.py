@@ -45,7 +45,6 @@ def plot_sample_comps(comps, index, num_points, num_chairs):
 
     plt.scatter(comps[:,0],comps[:,1],color=colors)
     plt.colorbar()
-    #plt.title(f"n_neighbour: {neigh}  min_dist: {dist}")
     plt.savefig(f'latent{index}.png',format='png',dpi=100)
     plt.show()
     plt.close()
@@ -97,8 +96,8 @@ def prepare_latents(latent_vecs):
 
 def get_testset(args):
 
-    inj = glob.glob(os.path.join(INJECTIONS2, args.inference_folder, '*fc5.npy'))[:args.batch_size]
-    no_inj = glob.glob(os.path.join(INJECTIONS2, args.inference_folder, '*[!fc5].npy'))[:args.batch_size]
+    inj = glob.glob(os.path.join(INJECTIONS, args.inference_folder, '*fc5.npy'))[:args.batch_size]
+    no_inj = glob.glob(os.path.join(INJECTIONS, args.inference_folder, '*[!fc5].npy'))[:args.batch_size]
 
     print("INJ:",len(inj))
     print("No INJ:",len(no_inj))
@@ -136,12 +135,6 @@ def get_results():
     args = inference_arg_parser()
 
     model_paths = get_model_paths(args)
-
-    # for idx in range(len(model_paths)):
-
-        # if int(model_paths[idx].split('/')[-2]) % 2 == 0:
-
-        #     args.inference_folder = args.inference_folder + '_unnormalized' 
 
     print(args.inference_folder)
 
