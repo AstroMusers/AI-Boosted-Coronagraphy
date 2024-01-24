@@ -97,6 +97,7 @@ class SynDatasetLabel(Dataset):
         
         image_path = self.image_paths[index]
         
+        #Fix this if statement WDYM fc5??????
         if 'fc5' in image_path.split('/')[-1]:
             label = torch.squeeze(torch.Tensor([1]))
         else:

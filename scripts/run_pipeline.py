@@ -5,7 +5,6 @@ import astropy.io.fits as fits
 import time
 from jwst.associations.mkpool import mkpool
 from jwst.associations import AssociationRegistry
-from jwst.associations.mkpool import mkpool
 from jwst.associations import generate
 
 

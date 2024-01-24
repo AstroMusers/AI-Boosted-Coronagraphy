@@ -8,17 +8,35 @@ from itertools import product
 import itertools
 from astropy.wcs import WCS
 import math
-
+import glob
+import numpy as np
+import matplotlib.pyplot as plt
+from itertools import product
+import random
+import os
+import glob
+import numpy as np
+import matplotlib.pyplot as plt
+import astropy.io.fits as fits
+from itertools import product
+from astropy.wcs import WCS
+from astropy.coordinates import SkyCoord  # High-level coordinates
+from astropy.coordinates import ICRS, Galactic, FK4, FK5
+from astropy.coordinates import Angle, Latitude, Longitude  # Angles
+import astropy.units as u
+import math
+import re
+import cv2
 
 ### HElPER functions to visualize fits files
 
 
-def get_lower_products(suffix,directory):
-    return glob(os.path.join(directory, f'**/*{suffix}.fits'))
+def get_lower_products(suffix, directory):
+    return glob.glob(os.path.join(directory, f'**/*{suffix}.fits'))
 
 
-def get_stage3_products(suffix,directory):
-    return glob(os.path.join(directory, f'*{suffix}.fits'))
+def get_stage3_products(suffix, directory):
+    return glob.glob(os.path.join(directory, f'*{suffix}.fits'))
 
 
 def get_axis_labels(w):
@@ -508,3 +526,394 @@ def plot_i2d_mir(data,ncols,title,w,axis_points,filtrs,instrume,program,targprop
     if save:
         plt.savefig(f'{title}_mir.png')
     
+def get_wcs(fits):
+    return WCS(fits[1].header, naxis=2)
+
+def get_ra_dec(fits):
+    ra  = fits[0].header['TARG_RA']
+    dec = fits[0].header['TARG_DEC'] 
+    return ra, dec
+
+def get_skycoord(ra, dec):
+    ra = Longitude(ra, unit=u.deg)
+    dec = dec * u.deg
+    sky_coord = SkyCoord(ra, dec, frame='icrs')
+    sky_coord = SkyCoord(frame=ICRS, ra=ra, dec=dec)
+    return sky_coord
+
+def skycoord_to_pixel(wcs,skycoord):
+    x, y = wcs.world_to_pixel(skycoord)
+    return  y, x 
+
+
+def rotate_point(x, y, angle_degrees, center=(40, 40)):
+    # Convert angle to radians
+    angle_radians = math.radians(angle_degrees)
+
+    # Calculate the distance from the center to the point
+    dx = x - center[0]
+    dy = y - center[1]
+
+    # Rotate the point
+    new_x = center[0] + dx * math.cos(angle_radians) + dy * math.sin(angle_radians)
+    new_y = center[1] - dx * math.sin(angle_radians) + dy * math.cos(angle_radians)
+
+    return new_x, new_y
+
+
+def flip_point(x, y, flipud:bool, fliplr:bool):
+
+    h, w = 80, 80
+
+
+    if flipud and fliplr:
+        new_x = h - 1 - x 
+        new_y = w - 1 - y  
+
+    elif (flipud == True) and (fliplr == False):
+        new_x = w - 1 - x  
+        new_y = y #w - 1 - y  
+
+    elif (flipud == False) and (fliplr == True):
+        new_x = x  
+        new_y = h - 1 - y 
+
+    else:
+        new_x, new_y = x, y
+
+
+    return new_x, new_y
+
+
+def find_new_coordinates_after_shift(original_x, original_y, right_shift, down_shift):
+    h, w = 80, 80
+    new_x = (original_x + right_shift) % h
+    new_y = (original_y + down_shift) % w
+    return new_x, new_y
+
+def calculate_distance(x1, y1, x2, y2):
+    
+    return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+
+def get_augmentation_info(info):
+
+    infos = []
+    for inf in info:  
+
+        numeric_info = []
+        for lst in inf.split('/')[-1].split('-')[6:-3]:
+
+            numeric_info.append(re.findall(r'\d+', lst)[0])
+
+        infos.append(numeric_info)
+
+    return infos
+
+
+def get_psf_info(injection_dirs):
+
+    #root_dir = "/data/scratch/bariskurtkaya/dataset/NIRCAM/1386/mastDownload/JWST/"
+    root_dir = "/data/scratch/sarperyurtseven/dataset/NIRCAM/1386/mastDownload/JWST/"
+    sew = set()
+    star_location_info = []
+    for i in range(len(injection_dirs)):
+        
+        psf_name = '-'.join(injection_dirs[i].split('/')[-1].split('-')[:4]) + '_psfstack.fits'
+
+        complete_dirs = os.path.join(root_dir, psf_name)
+        psf_ = fits.open(complete_dirs)
+        wcs = get_wcs(psf_)
+        ra, dec = get_ra_dec(psf_)
+        sew.add((ra,dec))
+        sky_coord = get_skycoord(ra, dec)
+        x, y = skycoord_to_pixel(wcs, sky_coord)
+        star_location_info.append((x,y))
+        
+    return star_location_info
+
+def do_transformations(infos, locations):
+
+    transformed_list = []
+    for idx, info in enumerate(infos):
+
+        if len(info) == 6:
+
+            y = 54-4#int(locations[idx][0]) 
+            x = 36-5#int(locations[idx][1])
+
+            rotate     = int(info[0])
+            flip       = int(info[1])
+            vertical   = int(info[2])
+            horizontal = int(info[3])
+            vshift     = int(info[4])
+            hshift     = int(info[5])
+
+            x, y = rotate_point(x, y, rotate*90)
+
+            x, y = flip_point(x, y, flipud=True if flip == 1 or flip == 3 else False, fliplr=True if flip == 2 or flip == 3 else False)
+            x, y = find_new_coordinates_after_shift(x, y, right_shift=hshift if horizontal == 2 else -hshift, down_shift=vshift if vertical == 2 else -vshift)
+
+            transformed_list.append((int(x), int(y)))
+
+        else:
+            y = 54#int(locations[idx][0]) 
+            x = 36#int(locations[idx][1])
+            transformed_list.append((y, x))
+
+    return transformed_list
+
+def get_array(nps):
+
+    arrays = []
+
+    for arr in nps[:25]:
+
+        img = np.load(arr)
+        arrays.append(img)
+
+    arrays = np.concatenate(np.expand_dims(arrays, axis=0))
+
+    return arrays        
+
+
+def apply_low_pass(array):
+
+    if len(array.shape) == 2:
+    
+        r = 50
+        ham = np.hamming(80)[:,None] 
+        ham2d = np.sqrt(np.dot(ham, ham.T)) ** r 
+        f = cv2.dft(array.astype(np.float32), flags=cv2.DFT_COMPLEX_OUTPUT)
+        f_shifted = np.fft.fftshift(f)
+        f_complex = f_shifted[:,:,0]*1j + f_shifted[:,:,1]
+        f_filtered = ham2d * f_complex
+        f_filtered_shifted = np.fft.fftshift(f_filtered)
+        inv_img = np.fft.ifft2(f_filtered_shifted) 
+        filtered_img = np.abs(inv_img)
+        filtered_img -= filtered_img.min()
+        filtered_img = filtered_img*255 / filtered_img.max()
+        filtered_img = filtered_img.astype(np.uint8)
+        output = filtered_img
+
+    elif len(array.shape) == 3:
+
+        output = []
+        r = 50 
+        ham = np.hamming(80)[:,None] 
+        ham2d = np.sqrt(np.dot(ham, ham.T)) ** r 
+
+        for i in range(array.shape[0]):
+
+            f = cv2.dft(array[i].astype(np.float32), flags=cv2.DFT_COMPLEX_OUTPUT)
+            f_shifted = np.fft.fftshift(f)
+            f_complex = f_shifted[:,:,0]*1j + f_shifted[:,:,1]
+            f_filtered = ham2d * f_complex
+            f_filtered_shifted = np.fft.fftshift(f_filtered)
+            inv_img = np.fft.ifft2(f_filtered_shifted) 
+            filtered_img = np.abs(inv_img)
+            filtered_img -= filtered_img.min()
+            filtered_img = filtered_img*255 / filtered_img.max()
+            filtered_img = filtered_img.astype(np.uint8)
+            output.append(filtered_img)
+        
+        output = np.concatenate(np.expand_dims(output, axis=0))
+
+
+    return output
+
+
+def get_wcs(fits):
+    return WCS(fits[1].header, naxis=2)
+
+def get_ra_dec(fits):
+    ra  = fits[0].header['TARG_RA']
+    dec = fits[0].header['TARG_DEC'] 
+    return ra, dec
+
+def get_skycoord(ra, dec):
+    ra = Longitude(ra, unit=u.deg)
+    dec = dec * u.deg
+    sky_coord = SkyCoord(ra, dec, frame='icrs')
+    sky_coord = SkyCoord(frame=ICRS, ra=ra, dec=dec)
+    return sky_coord
+
+def skycoord_to_pixel(wcs,skycoord):
+    x, y = wcs.world_to_pixel(skycoord)
+    return  y, x 
+
+
+def rotate_point(x, y, angle_degrees, center=(40, 40)):
+    # Convert angle to radians
+    angle_radians = math.radians(angle_degrees)
+
+    # Calculate the distance from the center to the point
+    dx = x - center[0]
+    dy = y - center[1]
+
+    # Rotate the point
+    new_x = center[0] + dx * math.cos(angle_radians) + dy * math.sin(angle_radians)
+    new_y = center[1] - dx * math.sin(angle_radians) + dy * math.cos(angle_radians)
+
+    return new_x, new_y
+
+
+def flip_point(x, y, flipud:bool, fliplr:bool):
+
+    h, w = 80, 80
+
+
+    if flipud and fliplr:
+        new_x = h - 1 - x 
+        new_y = w - 1 - y  
+
+    elif (flipud == True) and (fliplr == False):
+        new_x = w - 1 - x  
+        new_y = y #w - 1 - y  
+
+    elif (flipud == False) and (fliplr == True):
+        new_x = x  
+        new_y = h - 1 - y 
+
+    else:
+        new_x, new_y = x, y
+
+
+    return new_x, new_y
+
+
+def find_new_coordinates_after_shift(original_x, original_y, right_shift, down_shift):
+    h, w = 80, 80
+    new_x = (original_x + right_shift) % h
+    new_y = (original_y + down_shift) % w
+    return new_x, new_y
+
+def calculate_distance(x1, y1, x2, y2):
+    
+    return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+
+def get_augmentation_info(info):
+
+    infos = []
+    for inf in info:  
+
+        numeric_info = []
+        for lst in inf.split('/')[-1].split('-')[6:-3]:
+
+            numeric_info.append(re.findall(r'\d+', lst)[0])
+
+        infos.append(numeric_info)
+
+    return infos
+
+
+def get_psf_info(injection_dirs):
+
+    #root_dir = "/data/scratch/bariskurtkaya/dataset/NIRCAM/1386/mastDownload/JWST/"
+    root_dir = "/data/scratch/sarperyurtseven/dataset/NIRCAM/1386/mastDownload/JWST/"
+    sew = set()
+    star_location_info = []
+    for i in range(len(injection_dirs)):
+        
+        psf_name = '-'.join(injection_dirs[i].split('/')[-1].split('-')[:4]) + '_psfstack.fits'
+
+        complete_dirs = os.path.join(root_dir, psf_name)
+        psf_ = fits.open(complete_dirs)
+        wcs = get_wcs(psf_)
+        ra, dec = get_ra_dec(psf_)
+        sew.add((ra,dec))
+        sky_coord = get_skycoord(ra, dec)
+        x, y = skycoord_to_pixel(wcs, sky_coord)
+        star_location_info.append((x,y))
+        
+    return star_location_info
+
+
+def do_transformations(infos, locations):
+
+    transformed_list = []
+    for idx, info in enumerate(infos):
+
+        if len(info) == 6:
+
+            y = 54-4#int(locations[idx][0]) 
+            x = 36-5#int(locations[idx][1])
+
+            rotate     = int(info[0])
+            flip       = int(info[1])
+            vertical   = int(info[2])
+            horizontal = int(info[3])
+            vshift     = int(info[4])
+            hshift     = int(info[5])
+
+            x, y = rotate_point(x, y, rotate*90)
+
+            x, y = flip_point(x, y, flipud=True if flip == 1 or flip == 3 else False, fliplr=True if flip == 2 or flip == 3 else False)
+            x, y = find_new_coordinates_after_shift(x, y, right_shift=hshift if horizontal == 2 else -hshift, down_shift=vshift if vertical == 2 else -vshift)
+
+            transformed_list.append((int(x), int(y)))
+
+        else:
+            y = 54#int(locations[idx][0]) 
+            x = 36#int(locations[idx][1])
+            transformed_list.append((y, x))
+
+    return transformed_list
+
+def get_array(nps):
+
+    arrays = []
+
+    for arr in nps[:25]:
+
+        img = np.load(arr)
+        arrays.append(img)
+
+    arrays = np.concatenate(np.expand_dims(arrays, axis=0))
+
+    return arrays        
+
+
+def apply_low_pass(array):
+
+    if len(array.shape) == 2:
+    
+        r = 50
+        ham = np.hamming(80)[:,None] 
+        ham2d = np.sqrt(np.dot(ham, ham.T)) ** r 
+        f = cv2.dft(array.astype(np.float32), flags=cv2.DFT_COMPLEX_OUTPUT)
+        f_shifted = np.fft.fftshift(f)
+        f_complex = f_shifted[:,:,0]*1j + f_shifted[:,:,1]
+        f_filtered = ham2d * f_complex
+        f_filtered_shifted = np.fft.fftshift(f_filtered)
+        inv_img = np.fft.ifft2(f_filtered_shifted) 
+        filtered_img = np.abs(inv_img)
+        filtered_img -= filtered_img.min()
+        filtered_img = filtered_img*255 / filtered_img.max()
+        filtered_img = filtered_img.astype(np.uint8)
+        output = filtered_img
+
+    elif len(array.shape) == 3:
+
+        output = []
+        r = 50 
+        ham = np.hamming(80)[:,None] 
+        ham2d = np.sqrt(np.dot(ham, ham.T)) ** r 
+
+        for i in range(array.shape[0]):
+
+            f = cv2.dft(array[i].astype(np.float32), flags=cv2.DFT_COMPLEX_OUTPUT)
+            f_shifted = np.fft.fftshift(f)
+            f_complex = f_shifted[:,:,0]*1j + f_shifted[:,:,1]
+            f_filtered = ham2d * f_complex
+            f_filtered_shifted = np.fft.fftshift(f_filtered)
+            inv_img = np.fft.ifft2(f_filtered_shifted) 
+            filtered_img = np.abs(inv_img)
+            filtered_img -= filtered_img.min()
+            filtered_img = filtered_img*255 / filtered_img.max()
+            filtered_img = filtered_img.astype(np.uint8)
+            output.append(filtered_img)
+        
+        output = np.concatenate(np.expand_dims(output, axis=0))
+
+
+    return output
