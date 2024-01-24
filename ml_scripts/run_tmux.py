@@ -1,6 +1,11 @@
 import subprocess
 
-### MULTIPLE EXPERIMENT script
+
+########################################################################
+########################################################################
+######## SIMULTANEOUS EXPERIMENT script
+########################################################################
+########################################################################
 
 exp_h = [
     "python train_ae.py --device cuda:0 --idx ae_filter/4 --wandb --loss_type l1 --seed 0 --lr 3e-5 --batch_size 256 --model ae --scheduler --apply_lowpass",
