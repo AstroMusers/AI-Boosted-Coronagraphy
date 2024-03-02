@@ -31,51 +31,293 @@ import cv2
 ### HElPER functions to visualize fits files
 
 
-def get_lower_products(suffix, directory):
-    return glob.glob(os.path.join(directory, f'**/*{suffix}.fits'))
+class FITSVisualizer():
 
 
-def get_stage3_products(suffix, directory):
-    return glob.glob(os.path.join(directory, f'*{suffix}.fits'))
+    def __init__(self, directory, suffix):
+
+        self.directory = directory
+        self.suffix    = suffix
 
 
-def get_axis_labels(w):
-
-    times = RA2time(w[0])
-    y_labels = create_axis_label(times,fixed=2)
-    x_labelish = [str(round(x_label,3)) for x_label in w[1]]
-    x_labels = create_declination_labels(x_labelish)
-
-    return y_labels,x_labels
-
-def pixel_to_arcsec_nircam(axis_length,wavelength):
-    
-    short_wavelengths = ['F070W', 'F090W', 'F115W', 'F140M', 'F150W', 'F162M', 'F164N', 'F150W2', 'F182M', 'F187N', 'F200W', 'F210M', 'F212N']
-
-    long_wavelengths = ['F250M', 'F277W', 'F300M', 'F322W2', 'F323N', 'F335M', 'F356W', 'F360M', 'F405N', 'F410M', 'F430M', 'F444W', 'F460M', 'F466N', 'F470N', 'F480M']
-    
-    if wavelength in short_wavelengths:
-        x = 1 / 0.031 
-    
-    elif wavelength in long_wavelengths:
-        x = 1 / 0.063
-
-    else:
-        raise ValueError('Wavelength not found!')
-    
-    zero_point = axis_length / 2
-    pos_current_point = zero_point
-    neg_current_point = zero_point
-    
-    arcsec_axis_points = [zero_point]
-
-    while (pos_current_point + x) < axis_length:
-        pos_current_point += x
-        neg_current_point -= x
-        #print(pos_current_point)
-        arcsec_axis_points.append(pos_current_point)
-        arcsec_axis_points.append(neg_current_point)
+    def get_products(self):
         
+        products = glob.glob(os.path.join(self.directory, f'**/*{self.suffix}.fits'))
+
+        if len(products) == 0:
+            products = glob.glob(os.path.join(self.directory, f'*{self.suffix}.fits'))
+
+        print(f'{self.suffix}:',len(products))
+
+        return products
+
+
+    def get_things(self):
+
+        primary_header = []
+        sci_header      = []
+        sci_array       = []
+
+        products = self.get_products()
+
+        for i, path in enumerate(products):
+            file = fits.open(path)
+
+            primary_header.append(file[0].header)
+            sci_header.append(file[1].header)
+            sci_array.append(file[1].data)
+
+        things_dict = {'primary_header':primary_header, 'sci_header':sci_header, 'sci_array':sci_array}
+        print("Dictionary keys:",things_dict.keys())
+
+        return things_dict
+    
+
+    def pixel2wcs(self): 
+        
+        products = self.get_products()
+        file = fits.open(products[0])
+        axis = len(file[1].data.shape)
+
+
+        axs_length = np.max(file[1].data.shape)
+        axis_point = np.arange(3) #???
+        axis_points = np.round(axis_point * axs_length/2)
+        
+        if axis > 2:
+            w = WCS(file[1].header,naxis=2)
+        else:
+            w = WCS(file[1].header)
+            
+        world_coords = w.pixel_to_world_values((axis_points), (axis_points))
+        
+        return world_coords, axis_points
+
+
+    def get_headers(self, header_name):
+        
+        things_dict     = self.get_things()
+        primary_header  = things_dict['primary_header']
+        properties = []
+
+        for i in range(len(primary_header)):
+            properties.append(primary_header[i][f'{header_name.upper()}'])
+        
+        return properties
+
+
+    def RA2time(self, degree):
+    
+        if isinstance(degree, np.ndarray):
+            time_list = []
+            
+            for i in degree:
+                
+                hour_frac, hour = math.modf(i/15)
+                min_frac, minute = math.modf(hour_frac*60)
+                sec_frac, seconds = math.modf(min_frac*60)
+                seconds = round(seconds+sec_frac,1)
+                
+                d2t = (int(hour),int(minute),seconds)
+                time_list.append(d2t)
+                
+            return time_list
+
+
+    def create_axis_label(self, times, fixed):
+    
+        labels = []
+        lbl = ''
+        for i in range(len(times)):
+            if i == fixed:
+                for j in times[i]:
+                    lbl += str(j)+':'
+                lbl = lbl[:-1]
+                labels.append(lbl)                
+            else:
+                labels.append(times[i][2])
+
+        return labels
+
+
+    def create_declination_labels(self, labelish, fixed=1):
+        
+        labels = []
+        for i in range(len(labelish)):
+            if i == fixed:
+                labels.append(labelish[i])
+            else:
+                labels.append(labelish[i][4:])
+                
+        return labels
+
+    def get_axis_labels(self):
+        
+        world_coords, axis_points = self.pixel2wcs()
+        times = self.RA2time(world_coords[0])
+        y_labels = self.create_axis_label(times,fixed=2)
+        x_labelish = [str(round(x_label,3)) for x_label in world_coords[1]]
+        x_labels = self.create_declination_labels(x_labelish)
+
+        return y_labels,x_labels, axis_points
+    
+    def place_metadata(self, instrume, filters, targprop, program, data, _, naxis):
+
+        if naxis > 3:
+           
+            text_offset = 0.65  # Adjust as needed for positioning within the figure
+            for text_info in zip(
+                ("INSTRUME", "FILTERS", "TARGPROP", "PROGRAM"),
+                (instrume[data], filters[data], targprop[data], program[data])):
+                label, value = text_info
+                plt.figtext(
+                    0.9,
+                    text_offset,
+                    f"{value}",
+                    fontsize=5,
+                    fontweight='bold',
+                    ha="right",
+                    va="center")
+                text_offset -= 0.012  # Adjust for next text placement
+
+            plt.subplots_adjust(wspace=0, hspace=0.2)  
+            plt.suptitle(self.suffix.upper(), y=0.65, x=0.5, fontsize=7, fontweight='bold')
+
+        else:
+            _.patch.set_facecolor('#423f3b')
+            text_offset = 0.85  # Adjust as needed for positioning within the figure
+            for text_info in zip(
+                ("INSTRUME", "FILTERS", "TARGPROP", "PROGRAM"),
+                (instrume[data], filters[data], targprop[data], program[data])):
+                label, value = text_info
+                plt.figtext(
+                    0.9,
+                    text_offset,
+                    f"{value}",
+                    fontsize=5,
+                    fontweight='bold',
+                    ha="right",
+                    va="center")
+                text_offset -= 0.012  # Adjust for next text placement
+
+            plt.subplots_adjust(wspace=0, hspace=0.1)  
+            plt.suptitle(self.suffix.upper(), y=0.85, x=0.5, fontsize=5, fontweight='bold')
+
+        
+        
+        plt.show()
+
+    def plot(self):
+
+        y_labels, x_labels, axis_points = self.get_axis_labels()
+        things_dict                     = self.get_things()
+        arrays   = things_dict['sci_array']
+        filters  = self.get_headers(header_name='FILTER')
+        instrume = self.get_headers(header_name='INSTRUME')
+        program  = self.get_headers(header_name='PROGRAM')
+        targprop = self.get_headers(header_name='TARGPROP')
+        naxis = len(arrays[0].shape)
+        ncol = arrays[0].shape[0] if arrays[0].shape[0] < 5 else 5
+
+        for data in range(len(arrays)):
+
+            if naxis == 3:
+                _, axes = plt.subplots(nrows=1, ncols=ncol, figsize=(12.8, 9.6))
+                for array, (row,col) in enumerate(itertools.product(range(1),range(ncol))):
+                    A = arrays[data][array]
+                    A[np.isnan(A)] = np.nanmean(A)
+                    axes[col].imshow(np.arcsinh(A), cmap='gray')
+
+                    if (col == 0):
+                        axes[col].set_yticks(axis_points, y_labels, fontsize=5)
+                        axes[col].set_xticks(axis_points, x_labels, fontsize=5)
+                        axes[col].set_xlabel('DEC', fontsize=5, fontweight='bold')
+                        axes[col].set_ylabel('RA', fontsize=5, fontweight='bold')
+                    else:
+                        axes[col].set_yticks([])
+                        axes[col].set_xticks([])
+
+                self.place_metadata(instrume=instrume,
+                                    filters=filters,
+                                    targprop=targprop,
+                                    program=program,
+                                    data=data,
+                                    _=_,
+                                    naxis=naxis)
+                
+            if naxis == 2:
+                _,axes = plt.subplots(nrows=1, ncols=1, figsize=(4.8, 6.4))
+                A = arrays[data]
+                A[np.isnan(A)] = np.nanmean(A)
+
+                axes.imshow(np.arcsinh(A), cmap='gray')
+                axes.set_yticks(axis_points, y_labels, fontsize=5)
+                axes.set_xticks(axis_points, x_labels, fontsize=5)
+                axes.set_xlabel('DEC', fontsize=5, fontweight='bold')
+                axes.set_ylabel('RA', fontsize=5, fontweight='bold')
+
+                self.place_metadata(instrume=instrume,
+                    filters=filters,
+                    targprop=targprop,
+                    program=program,
+                    data=data,
+                    _=_,
+                    naxis=naxis)
+
+
+                
+
+
+'''
+
+
+
+
+    
+# def plot_psfstack(psfstack,ncol,nrow,title,w,axis_points,filtrs,instrume,program,targprop):
+    
+#     times = RA2time(w[0])
+#     y_labels = create_axis_label(times,fixed=2)
+#     x_labelish = [str(round(x_label,3)) for x_label in w[1]]
+#     x_labels = create_declination_labels(x_labelish)
+    
+#     for data in range(len(psfstack)):
+        
+#         if instrume[data] == 'NIRCAM':
+#             _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(36,8))
+        
+#         elif instrume[data] == 'MIRI':
+#             _, axes = plt.subplots(nrows=nrow,ncols=ncol,figsize=(28,8))
+
+#         for psf,(row,col) in enumerate(itertools.product(range(nrow),range(ncol))):
+            
+#             axes[row][col].imshow(psfstack[data][psf],cmap='gray')
+ 
+            
+            
+#             if (row == 1) & (col == 0):
+
+#                 axes[row][col].set_yticks(axis_points,y_labels)
+#                 axes[row][col].set_xticks(axis_points,x_labels)
+#                 axes[row][col].set_xlabel('DEC',fontsize=15,fontweight='bold')
+#                 axes[row][col].set_ylabel('RA',fontsize=15,fontweight='bold')
+            
+#             else:
+#                 axes[row][col].set_yticks([])
+#                 axes[row][col].set_xticks([])
+                
+#         plt.text(0.9, 1, instrume[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+#         plt.text(0.9, 0.95, filtrs[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+#         plt.text(0.9, 0.05, targprop[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+#         plt.text(0.9, 0, program[data], fontsize=20,fontweight='bold',transform=plt.gcf().transFigure)
+#         _.patch.set_facecolor('#423f3b')
+#         plt.subplots_adjust(wspace=0,hspace=0)
+#         plt.suptitle(title,y=1,x=0.5,fontsize=25,fontweight='bold')
+#         plt.show()
+
+
+
+
 def get_hdu(fits_, product):
     
     pri_data = []
@@ -122,6 +364,49 @@ def get_hdu(fits_, product):
 
         
     return pri_data, sci_data, err_data, dq_data, con_data, wht_data
+
+
+def get_stage3_products(suffix, directory):
+    return glob.glob(os.path.join(directory, f'*{suffix}.fits'))
+
+
+def get_axis_labels(w):
+
+    times = RA2time(w[0])
+    y_labels = create_axis_label(times,fixed=2)
+    x_labelish = [str(round(x_label,3)) for x_label in w[1]]
+    x_labels = create_declination_labels(x_labelish)
+
+    return y_labels,x_labels
+
+def pixel_to_arcsec_nircam(axis_length,wavelength):
+    
+    short_wavelengths = ['F070W', 'F090W', 'F115W', 'F140M', 'F150W', 'F162M', 'F164N', 'F150W2', 'F182M', 'F187N', 'F200W', 'F210M', 'F212N']
+
+    long_wavelengths = ['F250M', 'F277W', 'F300M', 'F322W2', 'F323N', 'F335M', 'F356W', 'F360M', 'F405N', 'F410M', 'F430M', 'F444W', 'F460M', 'F466N', 'F470N', 'F480M']
+    
+    if wavelength in short_wavelengths:
+        x = 1 / 0.031 
+    
+    elif wavelength in long_wavelengths:
+        x = 1 / 0.063
+
+    else:
+        raise ValueError('Wavelength not found!')
+    
+    zero_point = axis_length / 2
+    pos_current_point = zero_point
+    neg_current_point = zero_point
+    
+    arcsec_axis_points = [zero_point]
+
+    while (pos_current_point + x) < axis_length:
+        pos_current_point += x
+        neg_current_point -= x
+        #print(pos_current_point)
+        arcsec_axis_points.append(pos_current_point)
+        arcsec_axis_points.append(neg_current_point)
+        
 
 
 def get_sci(fits_):
@@ -219,7 +504,6 @@ def create_declination_labels(labelish,fixed=1):
             labels.append(labelish[i])
         else:
             labels.append(labelish[i][4:])
-            
             
     return labels
 
@@ -917,3 +1201,5 @@ def apply_low_pass(array):
 
 
     return output
+
+'''
