@@ -1,7 +1,7 @@
 from refactored_coron3_pipeline import RefactoredCoron3Pipeline
 
 import os
-from glob import glob
+import glob
 import time
 import sys
 import pandas as pd
@@ -15,9 +15,11 @@ from jwst.associations.lib.rules_level3 import Asn_Lv3Coron
 from jwst.associations import AssociationPool, AssociationRegistry
 from jwst.associations.mkpool import from_cmdline, mkpool
 from jwst.associations import generate
+from jwst.pipeline.calwebb_coron3 import Coron3Pipeline
 
-from ..util.util_main import get_dataset_dir, get_main_dir
-from ..util.util_type import INSTRUME
+
+from util_main import get_dataset_dir, get_main_dir
+from util_type import INSTRUME
 
 
 
@@ -39,35 +41,35 @@ class CoronPipeline():
 
     def pipeline_stage2(self, rateints_check: bool = False):
 
-        self.detector = 'nrcalong'
+        #self.detector = 'nrcalong'
 
-        rateints_files = glob(os.path.join(
-            self.dataset_dir, f'**/*{self.detector}_rateints.fits'))
-        if rateints_files == []:
-            self.detector = 'nrca2'
-            rateints_files = glob(os.path.join(
-                self.dataset_dir, f'**/*{self.detector}_rateints.fits'))
-
+        rateints_files = glob.glob(os.path.join(
+            self.dataset_dir, f'**/*rateints.fits'))
+        # if rateints_files == []:
+        #     self.detector = 'nrca2'
+        #     rateints_files = glob.glob(os.path.join(
+        #         self.dataset_dir, f'**/*{self.detector}_rateints.fits'))
+        
         if rateints_check:
             self.rateints_check(rateints_files=rateints_files)
 
         batch_size = 4
         img2pipeline = Image2Pipeline()
-        img2pipeline.save_results = True
 
         for index in range(0, len(rateints_files), batch_size):
             for rateints_files_batch in rateints_files[index:index+batch_size]:
                 output_dir = '/'.join(rateints_files_batch.split('/')
                                       [:-1]) + '/'
-
-                img2pipeline.output_dir = output_dir
-                img2pipeline(rateints_files_batch)
+                
+                #img2pipeline.output_dir = output_dir
+                #img2pipeline.save_results = True
+                img2pipeline.call(rateints_files_batch, save_results=True, output_dir=output_dir)
 
         del rateints_files, img2pipeline, batch_size
 
     def pipeline_stage3(self, asn_check: bool = False, calints_check: bool = False):
-        calints_files = glob(os.path.join(
-            self.dataset_dir, f'**/*{self.detector}_calints.fits'))
+        calints_files = glob.glob(os.path.join(
+            self.dataset_dir, f'**/*calints.fits'))
 
         if calints_check:
             self.calints_check(calints_files=calints_files)
@@ -77,10 +79,10 @@ class CoronPipeline():
         if asn_check:
             self.asn_check(asn_files=asn_files)
 
-        coron3_pipeline = RefactoredCoron3Pipeline()
+        coron3_pipeline = Coron3Pipeline()
         coron3_pipeline.output_dir = self.dataset_dir
         coron3_pipeline.save_results = True
-
+        print(asn_files)
         for idx, asn in enumerate(asn_files):
             asn_dict = {}
             for key, value in zip(asn.keys(), asn.values()):
@@ -110,8 +112,8 @@ class CoronPipeline():
         pool_df.to_csv(
             f'calints_{self.instrume}_{self.proposal_id}_pool.csv', index=False)
 
-        asn_coron_rule_dir = get_main_dir() + '/scripts' + '/asn_coron_rule.py'
-
+        #asn_coron_rule_dir = get_main_dir() + '/scripts' + '/asn_coron_rule.py'
+        asn_coron_rule_dir = '/home/sarperyn/.conda/envs/jwst-dev/lib/python3.9/site-packages/jwst/associations/lib/rules_level3.py'
         registry = AssociationRegistry(
             [asn_coron_rule_dir], include_default=False)
 
@@ -123,9 +125,17 @@ class CoronPipeline():
 if __name__ == "__main__":
 
     instrume: INSTRUME = 'NIRCAM'
-    proposal_id: str = '1386'
+    pids = sorted(glob.glob('/data/scratch/bariskurtkaya/dataset/NIRCAM/*'))
 
-    coron = CoronPipeline(proposal_id=proposal_id, instrume=instrume)
 
-    coron.pipeline_stage2()
-    coron.pipeline_stage3()
+    for pid in pids:
+        
+        try:
+            proposal_id: str = pid.split('/')[-1]
+            print("STARTING FOR PID:",proposal_id)
+            coron = CoronPipeline(proposal_id=proposal_id, instrume=instrume)
+            coron.pipeline_stage2()
+            coron.pipeline_stage3()
+
+        except:
+            print(f"Somethings wrong with {pid}")

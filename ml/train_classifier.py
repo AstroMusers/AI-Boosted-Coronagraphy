@@ -1,51 +1,36 @@
 
-import matplotlib.pyplot as plt
-import torch
 from torch.utils.data import DataLoader
-from torchvision import datasets
-from torchvision import transforms
-import torch.nn as nn
-import torch.optim as optim
-from torch.nn import functional as F
-from tqdm import tqdm
 import glob
 import os
 import sys
-import wandb
 import random
 sys.path.append(os.path.dirname(os.getcwd()))
-
 
 from util.util_data import *
 from util.util_dirs import *
 from util.util_train import *
-from ml.models import Train, VAE
+from models import ExoClassifier
 
 
-### TRAIN Autoencoder script
+### TRAIN classifier script
 
 def train_arg_parser():
 
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--device', type=str, default='cuda:0')
-    parser.add_argument('--idx',type=str, default='injections_ae/0')
+    parser.add_argument('--idx',type=str, default='classifier/0')
     parser.add_argument('--wandb', action='store_true', help='If true run wandb logger')
     parser.add_argument('--seed',type=int, default=0)
+    parser.add_argument('--epoch',type=int, default=15)
     parser.add_argument('--lr', type=float, default=3e-4)
-    parser.add_argument('--batch_size', type=int, default=256)
-    parser.add_argument('--loss_type', type=str, default='l1')
+    parser.add_argument('--batch_size', type=int, default=512)
     parser.add_argument('--optim', type=str, default='adam')
-    parser.add_argument('--model', type=str, default='ae')
     parser.add_argument('--scheduler', action='store_true', help='If true set scheduler')
-    parser.add_argument('--kld_weight', type=float, default=1, help='Weight of kld loss')
-    parser.add_argument('--arcsinh', action='store_true', help='If true np.arcsinh applied to the batch')
-    parser.add_argument('--train_folder', type=str, default='fc5_injections_train', help='Train folder name')
+    parser.add_argument('--train_folder', type=str, default='fc5_train', help='Train folder name')
     parser.add_argument('--apply_lowpass', action='store_true', help='If true apply low pass filter to the input images')
-    parser.add_argument('--latent_dim', type=int, default=8)
     args = parser.parse_args()
     return args
-
 
 def get_arc_params():
 
@@ -69,35 +54,24 @@ def get_arc_params():
 args = train_arg_parser()
 init_wandb(args)
 
-injected = glob.glob(os.path.join(INJECTIONS2, args.train_folder, '*fc5.npy'))[:50000]
-not_injected = glob.glob(os.path.join(INJECTIONS2, args.train_folder, '*[!fc5].npy'))[:50000]
+injected = glob.glob(os.path.join(INJECTIONS, args.train_folder, '*fc5.npy'))[:20000]
+not_injected = glob.glob(os.path.join(INJECTIONS, args.train_folder, '*[!fc5].npy'))[:20000]
 
 train_paths = injected + not_injected
 random.shuffle(train_paths)
 print(len(train_paths))
 
-
 syndata        = SynDatasetLabel(image_paths=train_paths, args=args)
 syndata_loader = DataLoader(dataset=syndata, batch_size=args.batch_size, shuffle=True)
-print(args.batch_size)
-
 
 convdim_outputs, kernels_enc, strides_enc = get_arc_params()
 
-model = VAE(args=args,
+
+model = ExoClassifier(args=args,
                in_channels=1,
-               latent_dim=args.latent_dim,
+               latent_dim=8,
                convdim_enc_outputs=convdim_outputs, 
                kernels=kernels_enc, 
                strides=strides_enc)
-    
-training = Train(model=model,
-              train_dataloader=syndata_loader,
-              args=args,
-              EPOCH=1500)
-    
-training.train_VAE()
 
-
-
-
+model.train_model(model=model,train_dataloader=syndata_loader)

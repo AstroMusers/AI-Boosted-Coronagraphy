@@ -20,7 +20,7 @@ from astropy.utils.exceptions import AstropyWarning
 if not os.environ.get('WEBBPSF_PATH'):
     os.environ['WEBBPSF_PATH'] = '/data/webbpsf-data'
 
-from util.util_main import get_filename_from_dir, get_dataset_dir
+from ProjectFiles.scripts.util_main import get_filename_from_dir, get_dataset_dir
 from scripts.visualization_helpers import get_stage3_products
 
 
@@ -380,7 +380,7 @@ if __name__ == '__main__':
     aug_count = 20
     flux_coefficients = [5]
     normalize_psf = True
-    filename = f'fc{flux_coefficients[0]}_test'
+    filename = f'fc{flux_coefficients[0]}_train'
 
     injection.apply_injection(injection_count=injection_count, aug_count=aug_count, inject_filename=filename, normalize_psf=normalize_psf, flux_coefficients=flux_coefficients)
 

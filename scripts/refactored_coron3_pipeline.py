@@ -156,7 +156,7 @@ class RefactoredCoron3Pipeline(Pipeline):
 
 
                 # Call KLIP
-                psf_sub = self.klip(target, psf_aligned)
+                psf_sub = self.klip.process(target, psf_aligned)
                 psf_aligned.close()
 
                 # Save the psf subtraction results
@@ -169,6 +169,7 @@ class RefactoredCoron3Pipeline(Pipeline):
 
                 # Split out the integrations into separate models
                 # in a ModelContainer to pass to `resample`
+                print(psf_sub)
                 for model in psf_sub.to_container():
                     print('Hello, resampleinputttssssssssssss')
                     resample_input.append(model)

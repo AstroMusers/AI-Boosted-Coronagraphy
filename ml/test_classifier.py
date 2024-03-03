@@ -2,27 +2,23 @@
 import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import DataLoader
-from torchvision import datasets
-import torch.nn as nn
-import torch.optim as optim
 from torch.nn import functional as F
-from tqdm import tqdm
 import glob
 import os
 import sys
 import wandb
 import pandas as pd
 import seaborn as sns
-from collections import defaultdict
 from sklearn.metrics import confusion_matrix
 from sklearn.metrics import f1_score
 sys.path.append(os.path.dirname(os.getcwd()))
+from scripts.visualization_helpers import *
 
 
 from util.util_data import *
 from util.util_dirs import *
 from util.util_train import *
-from ml.models import ExoClassifier
+from models import ExoClassifier
 
 
 ### TEST classifier script
@@ -33,15 +29,15 @@ def inference_arg_parser():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--device', type=str, default='cuda:0')
-    parser.add_argument('--real_data',type=str, default='/data/scratch/bariskurtkaya/dataset/NIRCAM/1441')# /data/scratch/sarperyurtseven/results/training_results
+    parser.add_argument('--real_data',type=str, default='/data/scratch/sarperyurtseven/dataset/NIRCAM/')# /data/scratch/sarperyurtseven/results/training_results
     parser.add_argument('--wandb', action='store_true', help='If true run wandb logger')
     parser.add_argument('--seed',type=int, default=1)
-    parser.add_argument('--batch_size', type=int, default=1024)
+    parser.add_argument('--batch_size', type=int, default=2048)
     parser.add_argument('--model', type=str, default='ae')
-    parser.add_argument('--inference_folder', type=str, default='sci_imgs', help='Train folder name') # fc5_injections_test
+    parser.add_argument('--inference_folder', type=str, default='fc5_test', help='Train folder name') # fc5_injections_test
     parser.add_argument('--apply_lowpass', action='store_true', help='If true apply low pass filter to the input images')
-    parser.add_argument('--model_path', type=str, default="/data/scratch/sarperyurtseven/results/training_results/classifier_filter/21/models/model.pt")
-    parser.add_argument('--result_savepath', type=str, default='/home/sarperyn/sarperyurtseven/ProjectFiles/scripts/results_fig')
+    parser.add_argument('--model_path', type=str, default="/data/scratch/sarperyurtseven/results/training_results/classifier/0/models/model.pt")
+    parser.add_argument('--result_savepath', type=str, default='/data/scratch/sarperyurtseven/results/training_results/classifier_lp/0/results_fig')
     parser.add_argument('--syn', action='store_true')
     args = parser.parse_args()
     return args
@@ -87,11 +83,13 @@ def get_testloader(args):
 
 
     if args.syn:
+        print(os.path.join(args.real_data, args.inference_folder, '*.npy'))
         test_paths = glob.glob(os.path.join(args.real_data, args.inference_folder, '*.npy'))
     
     else:       
-        inj = glob.glob(os.path.join(INJECTIONS2, args.inference_folder, '*fc5.npy'))[:args.batch_size]
-        no_inj = glob.glob(os.path.join(INJECTIONS2, args.inference_folder, '*[!fc5].npy'))[:args.batch_size]
+        print(os.path.join(INJECTIONS, args.inference_folder, '*fc5.npy'))
+        inj = glob.glob(os.path.join(INJECTIONS, args.inference_folder, '*fc5.npy'))[:args.batch_size]
+        no_inj = glob.glob(os.path.join(INJECTIONS, args.inference_folder, '*[!fc5].npy'))[:args.batch_size]
 
         print("INJ:",len(inj))
         print("No INJ:",len(no_inj))
@@ -101,7 +99,7 @@ def get_testloader(args):
     syndata        = SynDatasetLabel(image_paths=test_paths, args=args)
     syndata_loader = DataLoader(dataset=syndata, batch_size=1, shuffle=True)
 
-    return syndata_loader
+    return syndata_loader, test_paths
 
 
 def test_model(model, dataloader, args):
@@ -140,7 +138,7 @@ def test_model(model, dataloader, args):
     return results
 
 
-def plot_confusion_matrix(results, args):
+def plot_confusion_matrix(results, args, save_path):
     preds, targets = [], []
 
     # Extract predictions and targets from the 'results' list
@@ -169,7 +167,7 @@ def plot_confusion_matrix(results, args):
 
     # Save the plot with a file name based on 'args.model_path'
     model_name = '-'.join(args.model_path.split("/")[-4:-3])
-    plt.savefig(f'model_{model_name}_confusion_matrix.png', bbox_inches='tight')
+    plt.savefig(os.path.join(save_path, f'{i}.jpg'), format='jpg', pad_inches=0, dpi=200)
 
     # Print the F1 score and confusion matrix
     print("F1 score:", f1)
@@ -273,19 +271,20 @@ def visualize_results(results, model_name, save_path):
             ax.imshow(batch[col], interpolation='nearest')
 
             if (x[col] != 0) and (y[col] != 0):
-                ax.text(x[col], y[col], s="\u25CF", fontsize=12, color='green', alpha=.5, ha='center', va='center')
+                ax.text(x[col], y[col], s="\u25CF", fontsize=10, color='red', alpha=.5, ha='center', va='center')
 
             if col == 0:
-                ax.set_ylabel(f'{i}', fontsize=8, fontweight='bold')
-                ax.set_yticks(axis_points, labels, fontsize=4, rotation=0)
+                ax.set_ylabel('arcsec', fontsize=10,)
+                ax.set_xlabel('arcsec', fontsize=10,)
+                ax.set_yticks(axis_points, labels, fontsize=10, rotation=0)
 
             else:
                 ax.set_yticks([])
                 ax.set_xticks([])
-            ax.set_xticks(axis_points, labels, fontsize=4, rotation=75)
+            ax.set_xticks(axis_points, labels, fontsize=10, rotation=75)
 
-        plt.subplots_adjust(wspace=0, hspace=0)
-        plt.savefig(os.path.join(save_path, f'{i}.jpg'), format='jpg', bbox_inches='tight', pad_inches=0, dpi=200)
+        plt.subplots_adjust(wspace=.25, hspace=0)
+        plt.savefig(os.path.join(save_path, f'{i}.jpg'), format='jpg', bbox_inches='tight', pad_inches=.1, dpi=200)
         plt.close()
 
 
@@ -294,13 +293,20 @@ args = inference_arg_parser()
 
 model_name = '-'.join(args.model_path.split("/")[-4:-2])
 model = get_model(args.model_path, args.device)
-dataloader = get_testloader(args)
+dataloader, test_paths = get_testloader(args)
 results = test_model(model, dataloader, args)
 
-save_path = os.path.join(args.result_savepath,model_name)
+locations        = get_psf_info(test_paths)
+info             = get_augmentation_info(test_paths)
+transformed_list = do_transformations(info, locations)
+#arrays           = get_array(test_paths)
+
+
+
+save_path = os.path.join(args.result_savepath, model_name, "fc5")
 
 if not os.path.exists(save_path):
     os.makedirs(save_path)
 
-plot_confusion_matrix(results,args)
-#visualize_results(results, model_name, save_path=save_path)
+plot_confusion_matrix(results, args, save_path)
+visualize_results(results, model_name, save_path=save_path)
