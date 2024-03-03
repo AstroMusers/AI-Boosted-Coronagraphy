@@ -20,7 +20,7 @@ from astroquery.ipac.nexsci.nasa_exoplanet_archive import NasaExoplanetArchive
 from astropy.utils.exceptions import AstropyWarning
 
 from util.util_main import get_filename_from_dir, get_dataset_dir
-from scripts.visualization_helpers import get_stage3_products
+from notebooks.visualization_helpers import get_stage3_products
 
 import numpy as np
 
