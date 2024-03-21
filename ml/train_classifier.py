@@ -17,7 +17,7 @@ def train_arg_parser():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--device', type=str, default='cuda:0')
-    parser.add_argument('--idx',type=str, default='classifier/0')
+    parser.add_argument('--idx',type=str, default='classifier/new')
     parser.add_argument('--wandb', action='store_true', help='If true run wandb logger')
     parser.add_argument('--seed',type=int, default=0)
     parser.add_argument('--epoch',type=int, default=15)
@@ -104,7 +104,7 @@ convdim_outputs, kernels_enc, strides_enc = get_arc_params()
 
 model = ExoClassifier(args=args,
                in_channels=1,
-               latent_dim=8,
+               latent_dim=16,
                convdim_enc_outputs=convdim_outputs, 
                kernels=kernels_enc, 
                strides=strides_enc)

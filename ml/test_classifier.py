@@ -32,7 +32,7 @@ def inference_arg_parser():
     parser.add_argument('--test_size', type=int, default=8192)
     parser.add_argument('--apply_lowpass', action='store_true', help='If true apply low pass filter to the input images')
     parser.add_argument('--train_pids', type=str, default='1386', help='Choose the pids to train the model on (use * for all programs)')
-    parser.add_argument('--model_path', type=str, default='/data/scratch/sarperyurtseven/results/training_results/classifier/1/models/model.pt', help='Choose the model to test)')
+    parser.add_argument('--model_path', type=str, default='/data/scratch/sarperyurtseven/results/training_results/classifier/new_ep10/models/model.pt', help='Choose the model to test)')
     parser.add_argument('--train_filters', type=str, default='*', help='Choose the filters to train the model on (f300m, f277w, f356w, f444w) (use * for all filters)')
     parser.add_argument('--mode', type=str, default='test', help='Choose the mode (train, test)')
     args = parser.parse_args()
@@ -196,6 +196,7 @@ def get_psf_info_bs1(injection_dir, pid):
     psf_name = '-'.join(injection_dir.split('/')[-1].split('-')[:4]) + '_psfstack.fits'
     complete_dirs = os.path.join(root_dir, psf_name)
     psf_ = fits.open(complete_dirs)
+    #arcsec_per_pix = np.sqrt(psf_[1].header['PIXAR_A2'])
     wcs = get_wcs(psf_)
     ra, dec = get_ra_dec(psf_)
     sew.add((ra,dec))
@@ -424,23 +425,22 @@ def visualize_results(results_dict, coords_dict, star_coords_dict):
         plt.savefig(os.path.join(plot_save_path, f'{i}.jpg'), format='jpg', bbox_inches='tight', pad_inches=.1, dpi=200)
         plt.close()
 
-def colormap_auc_angular_distance(preds_dict, coords_dict, star_coords_dict, probs_dict):
+def colormap_auc_angular_distance(preds_dict, coords_dict, star_coords_dict, probs_dict, arcsec_per_pix):
     
     ultimate_dict = get_angular_distances(preds_dict, coords_dict, star_coords_dict, probs_dict)
     auc_scores    = get_auc_scores(ultimate_dict)
-    avg_angular_distances = [str(int(key)/2) for key in ultimate_dict['bin_distances']]
+    avg_angular_distances = [arcsec_per_pix * np.mean(np.array(expected)) for expected in [ultimate_dict['bin_distances'][key] for key in ultimate_dict['bin_distances']]]
     auc_scores = np.array(auc_scores)
     save_path = '/'.join(args.model_path.split('/')[:-2])
 
     plt.figure(figsize=(10, 6))
     plt.scatter(avg_angular_distances, auc_scores, c=auc_scores, cmap='viridis')
     plt.colorbar(label='AUC')
-    plt.xlabel('Angular Distance (degrees)')
+    plt.xlabel('Angular Distance (arcsec)')
     plt.ylabel('Area Under the Curve (AUC)')
     plt.title('AUC as a Function of Angular Distance')
     plt.savefig(os.path.join(save_path, f'colormap_plot_auc_angular_distance.jpg'), format='jpg', bbox_inches='tight', pad_inches=.1, dpi=200)
     plt.close()
-
 
 
 def get_angular_distances(preds_dict, coords_dict, star_coords_dict, probs_dict):
@@ -454,7 +454,6 @@ def get_angular_distances(preds_dict, coords_dict, star_coords_dict, probs_dict)
                          '15':[], 
                          '25':[],
                          '35':[]},
-
         'target':{'5':[],
                   '15':[], 
                   '25':[],
@@ -499,7 +498,7 @@ def get_auc_scores(ultimate_dict):
 
     auc_scores = []
 
-    for key in ultimate_dict['bin_distances']:
+    for key in ultimate_dict['target']:
         targets = np.array([i for i in ultimate_dict['target'][key]])
         probs = np.array([j.detach().cpu().numpy() for j in ultimate_dict['probs'][key]])
         fpr, tpr, thresholds = roc_curve(targets, probs)
@@ -509,13 +508,64 @@ def get_auc_scores(ultimate_dict):
         print(i)
     return auc_scores
 
+def colormap_auc_flux(preds_dict, probs_dict):
+    
+    ultimate_dict = get_fluxes(preds_dict, probs_dict)
+    auc_scores    = get_auc_scores(ultimate_dict)
+    flux = [str(int(key[2:])) for key in ultimate_dict['target']]
+    auc_scores = np.array(auc_scores)
+    save_path = '/'.join(args.model_path.split('/')[:-2])
+
+    plt.figure(figsize=(10, 6))
+    plt.scatter(flux, auc_scores, c=auc_scores, cmap='viridis')
+    plt.colorbar(label='AUC')
+    plt.xlabel('Flux (1/flux)')
+    plt.ylabel('Area Under the Curve (AUC)')
+    plt.title('AUC as a Function of Flux')
+    plt.savefig(os.path.join(save_path, f'colormap_plot_auc_flux.jpg'), format='jpg', bbox_inches='tight', pad_inches=.1, dpi=200)
+    plt.close()
+
+def get_fluxes(preds_dict, probs_dict):
+
+    ultimate_dict = {
+
+        'img_paths_bin':{'fc5':[],
+                         'fc100':[], 
+                         'fc1000':[],
+                         'fc10000':[]},
+        'target':{'fc5':[],
+                    'fc100':[], 
+                    'fc1000':[],
+                    'fc10000':[]},
+
+        'probs':{'fc5':[],
+                    'fc100':[], 
+                    'fc1000':[],
+                    'fc10000':[]},
+    }
+    
+    for i in ['TP', 'FN']:
+        for j in range(len(preds_dict[i])):
+            fc = re.findall(r'fc\d+',preds_dict[i][j])[0]
+            if fc in ['fc5', 'fc100', 'fc1000', 'fc10000']:
+                ultimate_dict['img_paths_bin'][fc].append(preds_dict[i][j])
+                ultimate_dict['target'][fc].append(1 if i == 'TP' else 0)
+                ultimate_dict['probs'][fc].append(probs_dict[i][j][0])
+            else:
+                continue
+
+    return ultimate_dict
+
+
 
 args = inference_arg_parser()
 
 model = get_model(args.model_path, args.device)
 dataloader, test_paths = get_testloader(args)
 
-# Plots confusion matrix, precision recall curve, roc curve
+arcsec_per_pixel = np.sqrt(fits.open(glob.glob(f'/data/scratch/bariskurtkaya/dataset/NIRCAM/{args.train_pids}/mastDownload/JWST/*psfstack.fits')[0])[1].header['PIXAR_A2'])
+
 preds_dict, coords_dict, star_coords_dict, probs_dict = test_model(model, dataloader, args)
-#visualize_results(preds_dict, coords_dict, star_coords_dict)
-colormap_auc_angular_distance(preds_dict, coords_dict, star_coords_dict, probs_dict)
+visualize_results(preds_dict, coords_dict, star_coords_dict)
+colormap_auc_angular_distance(preds_dict, coords_dict, star_coords_dict, probs_dict, arcsec_per_pixel)
+colormap_auc_flux(preds_dict, probs_dict)

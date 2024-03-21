@@ -429,7 +429,7 @@ class ExoClassifier(nn.Module):
 
 
         save_path = os.path.join(PLOTS_SAVE_PATH, f'training_results', str(self.args.idx), 'models')
-        save_dict_as_yaml((self.args), os.path.join(PLOTS_SAVE_PATH, 'args.yml'))
+        #save_dict_as_yaml((self.args), os.path.join(PLOTS_SAVE_PATH, 'args.yml'))
 
         if not os.path.exists(save_path):
            os.makedirs(save_path)
