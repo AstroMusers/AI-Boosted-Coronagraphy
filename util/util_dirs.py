@@ -1,8 +1,9 @@
 import os
 
-USER = 'sarperyurtseven'
+USER = 'bariskurtkaya'
 
-PLOTS_SAVE_PATH = f'/data/scratch/{USER}/results/'
-INJECTIONS = '/data/scratch/sarperyurtseven/dataset/NIRCAM/1386/injections/'
+PLOTS_SAVE_PATH = f'/data/scratch/sarperyurtseven/results/'
+NIRCAM_DATA = f'/data/scratch/{USER}/dataset/NIRCAM/'
+INJECTIONS = '/data/scratch/bariskurtkaya/dataset/NIRCAM/'
 
 
