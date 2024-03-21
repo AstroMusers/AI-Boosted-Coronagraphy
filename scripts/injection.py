@@ -20,11 +20,13 @@ from astropy.utils.exceptions import AstropyWarning
 if not os.environ.get('WEBBPSF_PATH'):
     os.environ['WEBBPSF_PATH'] = '/data/webbpsf-data'
 
-from ProjectFiles.scripts.util_main import get_filename_from_dir, get_dataset_dir
-from scripts.visualization_helpers import get_stage3_products
+from util_main import get_filename_from_dir, get_dataset_dir
+from visualization_helpers import get_stage3_products
 
 
 warnings.simplefilter('ignore', category=AstropyWarning)
+
+
 
 class Injection():
     def __init__(self, psf_directory: str, is_save_original:bool, is_save_augmented:bool, is_save_injected:bool) -> None:
@@ -153,10 +155,6 @@ class Injection():
 
             random_x = np.random.randint(min_pixel_distance, max_pix//2)
             random_y = np.random.randint(min_pixel_distance, max_pix//2)
-
-            # print(random_x)
-            # print(random_y)
-            # input()
 
             rand_sign_x = 1 if np.random.rand() < 0.5 else -1
             rand_sign_y = 1 if np.random.rand() < 0.5 else -1
@@ -364,11 +362,11 @@ class Injection():
 
 if __name__ == '__main__':
 
-    np.random.seed(42)
+    #np.random.seed(42)
 
     PROPOSAL_ID = '1386'
     INSTRUMENT = 'NIRCAM'
-    psf_directory = f'/data/scratch/sarperyurtseven/dataset/{INSTRUMENT}/{PROPOSAL_ID}/mastDownload/JWST/'
+    psf_directory = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/mastDownload/JWST/'
     
     is_save_original = True
     is_save_augmented = True
@@ -377,10 +375,10 @@ if __name__ == '__main__':
     injection = Injection(psf_directory=psf_directory, is_save_original=is_save_original, is_save_augmented=is_save_augmented, is_save_injected=is_save_injected)
 
     injection_count = 2
-    aug_count = 20
-    flux_coefficients = [5]
+    aug_count = 10
+    flux_coefficients = [10000]
     normalize_psf = True
-    filename = f'fc{flux_coefficients[0]}_train'
+    filename = f'test'
 
     injection.apply_injection(injection_count=injection_count, aug_count=aug_count, inject_filename=filename, normalize_psf=normalize_psf, flux_coefficients=flux_coefficients)
 
