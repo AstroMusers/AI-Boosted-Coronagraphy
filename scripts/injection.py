@@ -10,6 +10,8 @@ import webbpsf
 import sys
 sys.path.append("..")
 
+import torch
+
 from astropy.io import fits
 import astropy.units as u
 from astropy.coordinates import SkyCoord
@@ -58,8 +60,9 @@ class Injection():
 
             pix_per_arcsec = np.sqrt(self.psfstacks[filter_key][1].header['PIXAR_A2'])
             max_pix = int(1.5 / pix_per_arcsec)
-            size    = 80
-            psf_res = (320 - size) // 2
+            # size    = 80
+            # psf_res = (320 - size) // 2
+            psf_res = 320 // 2
 
             detector = self.psfstacks[filter_key][0].header['DETECTOR']
             filter = self.psfstacks[filter_key][0].header['FILTER']
@@ -77,7 +80,9 @@ class Injection():
                 if normalize_psf:
                     psf = self.augmentation.normalize(psf)
                 
-                psf = psf[psf_res:psf_res + size, psf_res:psf_res + size]
+                # psf = psf[psf_res:psf_res + size, psf_res:psf_res + size]
+                width, height = psf.shape
+                psf = psf[width/2-psf_res:width+psf_res, height/2-psf_res:height/2+psf_res]
                 norm_psf  = psf
 
                 filename = f'{"/".join(self.psf_directory.split("/")[:-3])}/injections/{inject_filename}/{filter_key}-psf{psf_idx}'
@@ -88,37 +93,37 @@ class Injection():
                         filename=f'{filename}.npy',
                         psf=norm_psf)
 
-                if not self.__is_psf_empty(psf):
+                # if not self.__is_psf_empty(psf):
+                self.__injection(
+                    psf=norm_psf, 
+                    generated_psf=generated_psf[generated_psf_selection].data, 
+                    max_pixel_distance=max_pixel_distance, 
+                    min_pixel_distance=min_pixel_distance, 
+                    max_pix = max_pix,
+                    injection_count=injection_count, 
+                    flux_coefficients=flux_coefficients,
+                    filename=filename
+                    )
+
+                for _ in range(aug_count):
+                    # We should consider the shift effect on injection.
+                    aug_psf, aug_filename, aug_comp_psf = self.__augmentation(norm_psf, generated_psf[generated_psf_selection].data, filename) 
                     self.__injection(
-                        psf=norm_psf, 
-                        generated_psf=generated_psf[generated_psf_selection].data, 
+                        psf=aug_psf,
+                        generated_psf=aug_comp_psf, 
                         max_pixel_distance=max_pixel_distance, 
                         min_pixel_distance=min_pixel_distance, 
                         max_pix = max_pix,
                         injection_count=injection_count, 
                         flux_coefficients=flux_coefficients,
-                        filename=filename
-                        )
+                        filename=aug_filename
+                    )
 
-                    for _ in range(aug_count):
-                        # We should consider the shift effect on injection.
-                        aug_psf, aug_filename, aug_comp_psf = self.__augmentation(norm_psf, generated_psf[generated_psf_selection].data, filename) 
-                        self.__injection(
-                            psf=aug_psf,
-                            generated_psf=aug_comp_psf, 
-                            max_pixel_distance=max_pixel_distance, 
-                            min_pixel_distance=min_pixel_distance, 
-                            max_pix = max_pix,
-                            injection_count=injection_count, 
-                            flux_coefficients=flux_coefficients,
-                            filename=aug_filename
-                        )
+                for _ in range(aug_count):
+                    aug_psf, aug_filename, aug_comp_psf = self.__augmentation(norm_psf, generated_psf[generated_psf_selection].data, filename) 
 
-                    for _ in range(aug_count):
-                        aug_psf, aug_filename, aug_comp_psf = self.__augmentation(norm_psf, generated_psf[generated_psf_selection].data, filename) 
-
-                else:
-                    pass
+                # else:
+                #     pass
             
     def __injection(self, 
                     psf, 
@@ -153,6 +158,9 @@ class Injection():
             # print(random_x)
             # print(random_y)
 
+            integral_psf = np.sum(psf)
+            generated_psf = self.augmentation.normalize(generated_psf)
+
             random_x = np.random.randint(min_pixel_distance, max_pix//2)
             random_y = np.random.randint(min_pixel_distance, max_pix//2)
 
@@ -164,7 +172,10 @@ class Injection():
 
             
             for flux_coefficient in flux_coefficients:
-                temp_psf = np.copy(generated_psf * (np.max(psf) / ( flux_coefficient * np.max(generated_psf))))
+                exo_flux = integral_psf * flux_coefficient
+                temp_psf = np.copy(generated_psf * exo_flux)
+                # temp_psf = np.copy(generated_psf * ((np.max(psf) * flux_coefficient)/ np.max(generated_psf)))
+
 
                 injected = np.copy(temp_psf[
                     int(temp_psf.shape[0]//2 - x): int(temp_psf.shape[0]//2 - x + psf.shape[0]),
@@ -331,7 +342,6 @@ class Injection():
 
         return new_x, new_y
 
-
     def __flip_point(img, x, y, flipud:bool, fliplr:bool):
 
         if flipud and fliplr:
@@ -348,8 +358,7 @@ class Injection():
 
 
         return new_x, new_y
-
-    
+  
     def __find_new_coordinates_after_shift(img, original_x, original_y, right_shift, down_shift):
         new_x = (original_x + right_shift) % img.shape[1]
         new_y = (original_y + down_shift) % img.shape[0]
@@ -376,9 +385,15 @@ if __name__ == '__main__':
 
     injection_count = 2
     aug_count = 10
-    flux_coefficients = [10000]
-    normalize_psf = True
+    
+    # Between 1/1.000 - 1/1.000.000.000 (10.000 samples)
+    # 65536 is it visible?
+    sample_count = 10e+3
+    flux_coef = torch.arange(sample_count) / sample_count # 0 - 1 normalized 10.000 samples
+    flux_coef = flux_coef * (10e-4 - 10e-10) + 10e-10
+    flux_coef = flux_coef.cpu().numpy()
+    
+    normalize_psf = False
     filename = f'test'
-
     injection.apply_injection(injection_count=injection_count, aug_count=aug_count, inject_filename=filename, normalize_psf=normalize_psf, flux_coefficients=flux_coefficients)
 
