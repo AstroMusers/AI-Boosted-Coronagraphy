@@ -60,9 +60,8 @@ class Injection():
 
             pix_per_arcsec = np.sqrt(self.psfstacks[filter_key][1].header['PIXAR_A2'])
             max_pix = int(1.5 / pix_per_arcsec)
-            # size    = 80
-            # psf_res = (320 - size) // 2
-            psf_res = 320 // 2
+            size    = 80
+            
 
             detector = self.psfstacks[filter_key][0].header['DETECTOR']
             filter = self.psfstacks[filter_key][0].header['FILTER']
@@ -80,12 +79,15 @@ class Injection():
                 if normalize_psf:
                     psf = self.augmentation.normalize(psf)
                 
-                # psf = psf[psf_res:psf_res + size, psf_res:psf_res + size]
                 width, height = psf.shape
-                psf = psf[width/2-psf_res:width+psf_res, height/2-psf_res:height/2+psf_res]
+                psf_res = (height - size) // 2
+                print(width, height)
+                print(psf_res)
+                psf = psf[psf_res:psf_res + size, psf_res:psf_res + size]
+                #psf = psf[width/2-psf_res:width+psf_res, height/2-psf_res:height/2+psf_res]
                 norm_psf  = psf
 
-                filename = f'{"/".join(self.psf_directory.split("/")[:-3])}/injections/{inject_filename}/{filter_key}-psf{psf_idx}'
+                filename = f'{"/".join(self.psf_directory.split("/")[:-3])}/injections/{filter_key}-psf{psf_idx}'
                 os.makedirs(os.path.join("/".join(self.psf_directory.split("/")[:-3]), f'injections/{inject_filename}'), exist_ok=True)
 
                 if self.is_save_original:
@@ -135,59 +137,60 @@ class Injection():
                     flux_coefficients:list=[100, 1000, 10000], 
                     filename:str=''
         ):
-        for _ in range(injection_count):
-            if max_pixel_distance > psf.shape[0]:
-                max_x = psf.shape[0]
-            else:
-                max_x = max_pixel_distance
-                
-            if max_pixel_distance > psf.shape[1]:
-                max_y = psf.shape[1]
-            else:
-                max_y = max_pixel_distance
+        #for _ in range(injection_count):
 
-            max_pix = int(max_pix)
-            # print(max_pix)
-            # print(min_pixel_distance)
-            # print(psf.shape[0]/2)
-            # print(min_pixel_distance)
-
-            # random_x = np.random.randint(min_pixel_distance, np.floor(max_x - (psf.shape[0]/2)))
-            # random_y = np.random.randint(min_pixel_distance, np.floor(max_y - (psf.shape[1]/2)))
-
-            # print(random_x)
-            # print(random_y)
-
-            integral_psf = np.sum(psf)
-            generated_psf = self.augmentation.normalize(generated_psf)
-
-            random_x = np.random.randint(min_pixel_distance, max_pix//2)
-            random_y = np.random.randint(min_pixel_distance, max_pix//2)
-
-            rand_sign_x = 1 if np.random.rand() < 0.5 else -1
-            rand_sign_y = 1 if np.random.rand() < 0.5 else -1
-
-            x = int((psf.shape[0]/2) + rand_sign_x*random_x)
-            y = int((psf.shape[1]/2) + rand_sign_y*random_y)
-
+        if max_pixel_distance > psf.shape[0]:
+            max_x = psf.shape[0]
+        else:
+            max_x = max_pixel_distance
             
-            for flux_coefficient in flux_coefficients:
-                exo_flux = integral_psf * flux_coefficient
-                temp_psf = np.copy(generated_psf * exo_flux)
-                # temp_psf = np.copy(generated_psf * ((np.max(psf) * flux_coefficient)/ np.max(generated_psf)))
+        if max_pixel_distance > psf.shape[1]:
+            max_y = psf.shape[1]
+        else:
+            max_y = max_pixel_distance
 
+        max_pix = int(max_pix)
+        # print(max_pix)
+        # print(min_pixel_distance)
+        # print(psf.shape[0]/2)
+        # print(min_pixel_distance)
 
-                injected = np.copy(temp_psf[
-                    int(temp_psf.shape[0]//2 - x): int(temp_psf.shape[0]//2 - x + psf.shape[0]),
-                    int(temp_psf.shape[1]//2 - y): int(temp_psf.shape[1]//2 - y + psf.shape[1])
-                ] + psf)
+        # random_x = np.random.randint(min_pixel_distance, np.floor(max_x - (psf.shape[0]/2)))
+        # random_y = np.random.randint(min_pixel_distance, np.floor(max_y - (psf.shape[1]/2)))
 
-                if self.is_save_injected:
-                    self.__save_psf_to_npy(
-                        filename=f'{filename}-x{y}-y{x}-fc{flux_coefficient}.npy', 
-                        psf=injected
-                    )
+        # print(random_x)
+        # print(random_y)
+
+        integral_psf = np.sum(psf)
+        generated_psf = self.augmentation.normalize(generated_psf)
+
+        random_x = np.random.randint(min_pixel_distance, max_pix//2)
+        random_y = np.random.randint(min_pixel_distance, max_pix//2)
+
+        rand_sign_x = 1 if np.random.rand() < 0.5 else -1
+        rand_sign_y = 1 if np.random.rand() < 0.5 else -1
+
+        x = int((psf.shape[0]/2) + rand_sign_x*random_x)
+        y = int((psf.shape[1]/2) + rand_sign_y*random_y)
+
         
+        for flux_coefficient in flux_coefficients:
+            exo_flux = integral_psf * flux_coefficient
+            temp_psf = np.copy(generated_psf * exo_flux)
+            # temp_psf = np.copy(generated_psf * ((np.max(psf) * flux_coefficient)/ np.max(generated_psf)))
+
+
+            injected = np.copy(temp_psf[
+                int(temp_psf.shape[0]//2 - x): int(temp_psf.shape[0]//2 - x + psf.shape[0]),
+                int(temp_psf.shape[1]//2 - y): int(temp_psf.shape[1]//2 - y + psf.shape[1])
+            ] + psf)
+
+            if self.is_save_injected:
+                self.__save_psf_to_npy(
+                    filename=f'{filename}-x{y}-y{x}-fc{flux_coefficient}.npy', 
+                    psf=injected
+                )
+    
         del temp_psf, injected, max_x, max_y, random_x, random_y, x, y, filename
     
     def __save_psf_to_npy(self, filename, psf):
@@ -375,7 +378,8 @@ if __name__ == '__main__':
 
     PROPOSAL_ID = '1386'
     INSTRUMENT = 'NIRCAM'
-    psf_directory = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{PROPOSAL_ID}/mastDownload/JWST/'
+    STATE = 'train'
+    psf_directory = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{STATE}/{PROPOSAL_ID}/mastDownload/JWST/'
     
     is_save_original = True
     is_save_augmented = True
@@ -394,6 +398,5 @@ if __name__ == '__main__':
     flux_coef = flux_coef.cpu().numpy()
     
     normalize_psf = False
-    filename = f'test'
-    injection.apply_injection(injection_count=injection_count, aug_count=aug_count, inject_filename=filename, normalize_psf=normalize_psf, flux_coefficients=flux_coefficients)
+    injection.apply_injection(injection_count=injection_count, aug_count=aug_count, inject_filename=STATE, normalize_psf=normalize_psf, flux_coefficients=flux_coef)
 
