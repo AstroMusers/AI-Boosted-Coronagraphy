@@ -267,10 +267,9 @@ class FITSVisualizer():
 def get_stage3_products(suffix, directory):
     return glob.glob(os.path.join(directory, f'*{suffix}.fits'))
 
-def get_psf_info(injection_dirs, pid):
+def get_psf_info(injection_dirs, pid, state):
 
-    root_dir = f"/data/scratch/bariskurtkaya/dataset/NIRCAM/{pid}/mastDownload/JWST/"
-    #root_dir = "/data/scratch/sarperyurtseven/dataset/NIRCAM/1386/mastDownload/JWST/"
+    root_dir = f"/data/scratch/bariskurtkaya/dataset/NIRCAM/{state}/{pid}/mastDownload/JWST/"
     sew = set()
     star_location_info = []
     for i in range(len(injection_dirs)):
