@@ -17,11 +17,11 @@ def train_arg_parser():
     parser = argparse.ArgumentParser()
 
     parser.add_argument('--device', type=str, default='cuda:0')
-    parser.add_argument('--idx',type=str, default='classifier/new')
+    parser.add_argument('--idx',type=str, default='classifier/b')
     parser.add_argument('--wandb', action='store_true', help='If true run wandb logger')
     parser.add_argument('--seed',type=int, default=0)
     parser.add_argument('--epoch',type=int, default=15)
-    parser.add_argument('--lr', type=float, default=3e-4)
+    parser.add_argument('--lr', type=float, default=3e-3)
     parser.add_argument('--batch_size', type=int, default=512)
     parser.add_argument('--optim', type=str, default='adam')
     parser.add_argument('--scheduler', action='store_true', help='If true set scheduler')
@@ -55,16 +55,16 @@ def get_paths(args):
 
         if len(train_filters) == 1:
             train_filters = train_filters[0]
-            injected     = glob.glob(os.path.join(NIRCAM_DATA,f'{train_pids}/injections/{mode}/*{train_filters}*fc*.npy'))
-            not_injected = glob.glob(os.path.join(NIRCAM_DATA,f'{train_pids}/injections/{mode}/*{train_filters}*[!fc].npy')) 
+            injected     = glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{train_filters}*fc*.npy'))
+            not_injected = glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{train_filters}*[!fc].npy')) 
 
         else:
             injected = []
             not_injected = []
 
             for f in train_filters:
-                injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{train_pids}/injections/{mode}/*{f}*fc*.npy'))
-                not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{train_pids}/injections/{mode}/*{f}*[!fc].npy'))
+                injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{f}*fc*.npy'))
+                not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{f}*[!fc].npy'))
 
     else:
         injected = []
@@ -72,15 +72,14 @@ def get_paths(args):
 
         if len(train_filters) == 1:
             for pid in train_pids:
-                injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{pid}/injections/{mode}/*{train_filters}*fc*.npy'))
-                not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{pid}/injections/{mode}/*{train_filters}*[!fc].npy'))
+                injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{train_filters}*fc*.npy'))
+                not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{train_filters}*[!fc].npy'))
 
         else:
             for pid in train_pids:
                 for f in train_filters:
-                    injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{pid}/injections/{mode}/*{f}*fc*.npy'))
-                    not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{pid}/injections/{mode}/*{f}*[!fc].npy'))
-
+                    injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{f}*fc*.npy'))
+                    not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{f}*[!fc].npy'))
 
     print("INJECTED:",len(injected))
     print("NOT INJECTED:",len(not_injected))

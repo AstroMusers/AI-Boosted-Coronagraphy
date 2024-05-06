@@ -387,7 +387,7 @@ if __name__ == '__main__':
     STATE = 'train'
     psf_directory = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{STATE}/{PROPOSAL_ID}/mastDownload/JWST/'
 
-    psf_directory = f'/data/scratch/bariskurtkaya/dataset/NIRCAM/train/train_test/1194/mastDownload/JWST'
+    #psf_directory = f'/data/scratch/bariskurtkaya/dataset/NIRCAM/train/train_test/1194/mastDownload/JWST'
     
     is_save_original = True
     is_save_augmented = True
@@ -399,7 +399,7 @@ if __name__ == '__main__':
     
     # Between 1/1.000 - 1/1.000.000.000 (100 samples)
     # 65536 is it visible?
-    aug_count = 1e+1
+    aug_count = 1e+3
 
 
     normalize_psf = False
