@@ -91,8 +91,8 @@ class Injection():
                 #psf = psf[width/2-psf_res:width+psf_res, height/2-psf_res:height/2+psf_res]
                 norm_psf  = psf
 
-                filename = f'{"/".join(self.psf_directory.split("/")[:-3])}/injections/{filter_key}-psf{psf_idx}'
-                os.makedirs(os.path.join("/".join(self.psf_directory.split("/")[:-3]), f'injections/{inject_filename}'), exist_ok=True)
+                filename = f'{"/".join(self.psf_directory.split("/")[:-3])}/test_injt/{filter_key}-psf{psf_idx}'
+                os.makedirs(os.path.join("/".join(self.psf_directory.split("/")[:-3]), f'test_injt/{inject_filename}'), exist_ok=True)
 
                 if self.is_save_original:
                     self.__save_psf_to_npy(
@@ -388,7 +388,7 @@ if __name__ == '__main__':
     psf_directory = f'/data/scratch/bariskurtkaya/dataset/{INSTRUMENT}/{STATE}/{PROPOSAL_ID}/mastDownload/JWST/'
 
     #psf_directory = f'/data/scratch/bariskurtkaya/dataset/NIRCAM/train/train_test/1194/mastDownload/JWST'
-    
+
     is_save_original = True
     is_save_augmented = True
     is_save_injected = True
@@ -399,7 +399,7 @@ if __name__ == '__main__':
     
     # Between 1/1.000 - 1/1.000.000.000 (100 samples)
     # 65536 is it visible?
-    aug_count = 1e+3
+    aug_count = 1e+2
 
 
     normalize_psf = False
