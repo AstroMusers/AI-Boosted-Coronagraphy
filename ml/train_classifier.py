@@ -57,6 +57,7 @@ def get_paths(args):
             train_filters = train_filters[0]
             injected     = glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{train_filters}*fc*.npy'))
             not_injected = glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{train_filters}*[!fc].npy')) 
+            not_injected = list(set(not_injected) - set(injected))
 
         else:
             injected = []
@@ -65,6 +66,7 @@ def get_paths(args):
             for f in train_filters:
                 injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{f}*fc*.npy'))
                 not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{f}*[!fc].npy'))
+                not_injected = list(set(not_injected) - set(injected))
 
     else:
         injected = []

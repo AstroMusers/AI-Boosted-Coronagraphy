@@ -29,10 +29,10 @@ def inference_arg_parser():
     #parser.add_argument('--wandb', action='store_true', help='If true run wandb logger')
     #parser.add_argument('--seed',type=int, default=1)
     parser.add_argument('--device', type=str, default='cuda:0')
-    parser.add_argument('--test_size', type=int, default=8192)
+    parser.add_argument('--test_size', type=int, default=1024)
     parser.add_argument('--apply_lowpass', action='store_true', help='If true apply low pass filter to the input images')
     parser.add_argument('--train_pids', type=str, default='1386', help='Choose the pids to train the model on (use * for all programs)')
-    parser.add_argument('--model_path', type=str, default='/data/scratch/sarperyurtseven/results/training_results/classifier/new_ep10/models/model.pt', help='Choose the model to test)')
+    parser.add_argument('--model_path', type=str, default='/data/scratch/sarperyurtseven/results/training_results/nemesis/1/models/model.pt', help='Choose the model to test)')
     parser.add_argument('--train_filters', type=str, default='*', help='Choose the filters to train the model on (f300m, f277w, f356w, f444w) (use * for all filters)')
     parser.add_argument('--mode', type=str, default='test', help='Choose the mode (train, test)')
     args = parser.parse_args()
@@ -99,28 +99,49 @@ def plot_roc_curve(targets, probs, save_path):
     fig_, ax_ = metric.plot(score=True)
     plt.savefig(os.path.join(save_path,'roc_curve.jpg'))
 
+def get_test_paths():
+
+    n = 2048
+    injected     = glob.glob('/home/sarperyn/sarperyurtseven/1386_test/test_injt/*fc*.npy')
+    not_injected = glob.glob('/home/sarperyn/sarperyurtseven/1386_test/test_injt/*[!fc]*.npy')
+    not_injected = list(set(not_injected) - set(injected))
+
+    print("INJECTED:",len(injected))
+    print("NOT INJECTED:",len(not_injected))
+    paths = []
+    for i in range(n):
+        paths.append(random.choice(injected))
+    for i in range(n):
+        paths.append(random.choice(not_injected))
+    #paths = injected + not_injected
+    random.shuffle(paths)
+    print("#Samples:",len(paths))
+
+    return paths
 
 def get_paths(args):
 
     train_pids = args.train_pids.split(' ')
     train_filters = args.train_filters.split(' ')
     mode = args.mode
-    
+
     if len(train_pids) == 1:
         train_pids = train_pids[0]
 
         if len(train_filters) == 1:
             train_filters = train_filters[0]
-            injected     = glob.glob(os.path.join(NIRCAM_DATA,f'{train_pids}/injections/{mode}/*{train_filters}*fc*.npy'))[:args.test_size]
-            not_injected = glob.glob(os.path.join(NIRCAM_DATA,f'{train_pids}/injections/{mode}/*{train_filters}*[!fc].npy'))[:args.test_size]
+            injected     = glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{train_filters}*fc*.npy'))
+            not_injected = glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{train_filters}*[!fc].npy')) 
+            not_injected = list(set(not_injected) - set(injected))
 
         else:
             injected = []
             not_injected = []
 
             for f in train_filters:
-                injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{train_pids}/injections/{mode}/*{f}*fc*.npy'))[:args.test_size]
-                not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{train_pids}/injections/{mode}/*{f}*[!fc].npy'))[:args.test_size]
+                injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{f}*fc*.npy'))
+                not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{f}*[!fc].npy'))
+                not_injected = list(set(not_injected) - set(injected))
 
     else:
         injected = []
@@ -128,15 +149,14 @@ def get_paths(args):
 
         if len(train_filters) == 1:
             for pid in train_pids:
-                injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{pid}/injections/{mode}/*{train_filters}*fc*.npy'))[:args.test_size]
-                not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{pid}/injections/{mode}/*{train_filters}*[!fc].npy'))[:args.test_size]
+                injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{train_filters}*fc*.npy'))
+                not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{train_filters}*[!fc].npy'))
 
         else:
             for pid in train_pids:
                 for f in train_filters:
-                    injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{pid}/injections/{mode}/*{f}*fc*.npy'))[:args.test_size]
-                    not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{pid}/injections/{mode}/*{f}*[!fc].npy'))[:args.test_size]
-
+                    injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{f}*fc*.npy'))
+                    not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{f}*[!fc].npy'))
 
     print("INJECTED:",len(injected))
     print("NOT INJECTED:",len(not_injected))
@@ -149,7 +169,8 @@ def get_paths(args):
 
 def get_testloader(args):
 
-    test_paths = get_paths(args)        
+    #test_paths = get_paths(args)        
+    test_paths = get_test_paths()        
 
     syndata        = SynDatasetLabel(image_paths=test_paths, args=args)
     syndata_loader = DataLoader(dataset=syndata, batch_size=1, shuffle=True)
@@ -163,7 +184,6 @@ def get_batch(dirs):
         batch.append(data)
     batch = np.concatenate(np.expand_dims(batch, axis=0))
     return batch
-
 
 def get_exo_coords(image_path):
     idx_x  = image_path.rfind('x')
@@ -189,7 +209,7 @@ def get_batch_coord(coords_dict, idx, bs):
 
 def get_psf_info_bs1(injection_dir, pid):
 
-    root_dir = f"/data/scratch/bariskurtkaya/dataset/NIRCAM/{pid}/mastDownload/JWST/"
+    root_dir = f"/data/scratch/bariskurtkaya/dataset/NIRCAM/train/{pid}/mastDownload/JWST/"
     #root_dir = "/data/scratch/sarperyurtseven/dataset/NIRCAM/1386/mastDownload/JWST/"
     sew = set()
     star_location_info = []        
@@ -249,7 +269,6 @@ def calculate_distance(x1, y1, x2, y2):
     
     return math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
 
-
 def get_related_confusion_entries(preds_dict, coords_dict, star_coords_dict, probs_dict, pred, prob, target, img_path):
 
 
@@ -286,8 +305,6 @@ def get_related_confusion_entries(preds_dict, coords_dict, star_coords_dict, pro
         coords_dict['FN'].append((x,y))
         star_coords_dict['FN'].append(transformed_star)
         probs_dict['FN'].append(prob)
-
-
 
 def test_model(model, dataloader, args):
 
@@ -366,7 +383,6 @@ def test_model(model, dataloader, args):
  
     return preds_dict, coords_dict, star_coords_dict, probs_dict
 
-
 def visualize_results(results_dict, coords_dict, star_coords_dict):
     
 
@@ -442,27 +458,14 @@ def colormap_auc_angular_distance(preds_dict, coords_dict, star_coords_dict, pro
     plt.savefig(os.path.join(save_path, f'colormap_plot_auc_angular_distance.jpg'), format='jpg', bbox_inches='tight', pad_inches=.1, dpi=200)
     plt.close()
 
-
 def get_angular_distances(preds_dict, coords_dict, star_coords_dict, probs_dict):
 
     ultimate_dict = {
-        'bin_distances':{'5':[],
-                         '15':[], 
-                         '25':[],
-                         '35':[]},
-        'img_paths_bin':{'5':[],
-                         '15':[], 
-                         '25':[],
-                         '35':[]},
-        'target':{'5':[],
-                  '15':[], 
-                  '25':[],
-                  '35':[]},
 
-        'probs':{'5':[],
-                  '15':[], 
-                  '25':[],
-                  '35':[]}
+        'distances':[],
+        'target':[],
+        'probs':[],
+        'img_paths':[],
     }
     
     for i in ['TP', 'FN']:
@@ -471,26 +474,11 @@ def get_angular_distances(preds_dict, coords_dict, star_coords_dict, probs_dict)
             x2, y2 = star_coords_dict[i][j]
 
             distance = calculate_distance(x1, y1, x2, y2)
-            if distance <= 5:
-                ultimate_dict['bin_distances']['5'].append(distance)
-                ultimate_dict['img_paths_bin']['5'].append(preds_dict[i][j])
-                ultimate_dict['target']['5'].append(1 if i == 'TP' else 0)
-                ultimate_dict['probs']['5'].append(probs_dict[i][j][0])
-            elif 5 < distance <= 15:
-                ultimate_dict['bin_distances']['15'].append(distance)
-                ultimate_dict['img_paths_bin']['15'].append(preds_dict[i][j])
-                ultimate_dict['target']['15'].append(1 if i == 'TP' else 0)
-                ultimate_dict['probs']['15'].append(probs_dict[i][j][0])
-            elif 15 < distance <= 25:
-                ultimate_dict['bin_distances']['25'].append(distance)
-                ultimate_dict['img_paths_bin']['25'].append(preds_dict[i][j])
-                ultimate_dict['target']['25'].append(1 if i == 'TP' else 0)
-                ultimate_dict['probs']['25'].append(probs_dict[i][j][0])
-            elif 25 < distance <= 35:
-                ultimate_dict['bin_distances']['35'].append(distance)
-                ultimate_dict['img_paths_bin']['35'].append(preds_dict[i][j])
-                ultimate_dict['target']['35'].append(1 if i == 'TP' else 0)
-                ultimate_dict['probs']['35'].append(probs_dict[i][j][0])
+            ultimate_dict['distances'].append(distance)
+            ultimate_dict['target'].append(1 if i == 'TP' else 0)
+            ultimate_dict['probs'].append(probs_dict[i][j][0][0].detach().cpu().numpy())
+            #ultimate_dict['fluxes'].append(int(re.findall(r'fc\d+', preds_dict[i][j])[0][2:]))
+            ultimate_dict['img_paths'].append(preds_dict[i][j])
 
     return ultimate_dict
 
@@ -547,14 +535,19 @@ def get_fluxes(preds_dict, probs_dict):
     for i in ['TP', 'FN']:
         for j in range(len(preds_dict[i])):
             fc = re.findall(r'fc\d+',preds_dict[i][j])[0]
+            print(fc)
             if fc in ['fc5', 'fc100', 'fc1000', 'fc10000']:
                 ultimate_dict['img_paths_bin'][fc].append(preds_dict[i][j])
                 ultimate_dict['target'][fc].append(1 if i == 'TP' else 0)
                 ultimate_dict['probs'][fc].append(probs_dict[i][j][0])
             else:
                 continue
-
+    
     return ultimate_dict
+
+def extract_flux_coefficient(path):
+    match = re.search(r'fc([\d\.eE\+\-]+)\.npy', path)
+    return float(match.group(1)) if match else None
 
 
 
@@ -563,9 +556,14 @@ args = inference_arg_parser()
 model = get_model(args.model_path, args.device)
 dataloader, test_paths = get_testloader(args)
 
-arcsec_per_pixel = np.sqrt(fits.open(glob.glob(f'/data/scratch/bariskurtkaya/dataset/NIRCAM/{args.train_pids}/mastDownload/JWST/*psfstack.fits')[0])[1].header['PIXAR_A2'])
+arcsec_per_pixel = np.sqrt(fits.open(glob.glob(f'/data/scratch/bariskurtkaya/dataset/NIRCAM/train/{args.train_pids}/mastDownload/JWST/*psfstack.fits')[0])[1].header['PIXAR_A2'])
 
 preds_dict, coords_dict, star_coords_dict, probs_dict = test_model(model, dataloader, args)
 visualize_results(preds_dict, coords_dict, star_coords_dict)
-colormap_auc_angular_distance(preds_dict, coords_dict, star_coords_dict, probs_dict, arcsec_per_pixel)
-colormap_auc_flux(preds_dict, probs_dict)
+
+ultimate_dict = get_angular_distances(preds_dict, coords_dict, star_coords_dict, probs_dict)
+df = pd.DataFrame(ultimate_dict)
+df['flux_coefficients'] = df['img_paths'].apply(extract_flux_coefficient)
+df.to_csv('results_fixed.csv', index=False)
+#colormap_auc_angular_distance(preds_dict, coords_dict, star_coords_dict, probs_dict, arcsec_per_pixel)
+#colormap_auc_flux(preds_dict, probs_dict)
