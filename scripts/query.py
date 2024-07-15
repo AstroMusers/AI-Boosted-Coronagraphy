@@ -24,7 +24,8 @@ def get_dataset_dir():
     dataset_dir = main_dir + "/dataset"
 
     # refactor needed.
-    dataset_dir = '/data/scratch/sarperyurtseven/dataset'
+    dataset_dir = '/data/scratch/bariskurtkaya/dataset'
+    print('Warning - Dataset_dir is overrided!')
 
     del main_dir
     return dataset_dir
@@ -113,7 +114,7 @@ if __name__ == "__main__":
 
     psgd= ['RATEINTS']
 
-    main_dataset_dir: str = '/data/scratch/sarperyurtseven/dataset/'
+    main_dataset_dir: str = '/data/scratch/bariskurtkaya/dataset/'
 
     # Class init
     query = Query()
