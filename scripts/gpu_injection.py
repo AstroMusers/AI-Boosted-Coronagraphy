@@ -28,7 +28,28 @@ from src.utils import get_filename_from_dir, get_dataset_dir, get_stage3_product
 from src.utils.seed import seed_everything
 from src.utils.time import timing
 
+from torchvision.transforms import v2
+
 warnings.simplefilter('ignore', category=AstropyWarning)
+torch.set_warn_always(True)
+
+FIRST_STEP = False
+
+class ModifiedRandomCrop(v2.RandomCrop):
+    def __init__(self, size, padding=None, pad_if_needed=False, fill=0, padding_mode='constant'):
+        super().__init__(size, padding=padding, pad_if_needed=pad_if_needed, fill=fill, padding_mode=padding_mode)
+    
+    def _transform(self, inpt, params):
+        if params["needs_pad"]:
+            fill = self._get_fill(self._fill, type(inpt))
+            inpt = self._call_kernel(v2.functional.pad, inpt, padding=params["padding"], fill=fill, padding_mode=self.padding_mode)
+
+        if params["needs_crop"]:
+            inpt = self._call_kernel(
+                v2.functional.crop, inpt, top=params["top"], left=params["left"], height=params["height"], width=params["width"]
+            )
+
+        return inpt, (params["top"], params["left"], params["top"]+params["height"], params["left"]+params["width"])
 
 class PSFDatasetGPU_Base(nn.Module):
     @timing
@@ -70,7 +91,8 @@ class PSFDatasetGPU_Base(nn.Module):
                 max_pixel_distance, min_pixel_distance = self.__get_max_min_pixel_distance(self.psfstacks[filter_key])
 
                 print(f'{filter_key} max pixel distance: {max_pixel_distance}, min pixel distance: {min_pixel_distance}')
-                fov = np.round(np.sqrt(self.psfstacks[filter_key][1].header['PIXAR_A2']), 3) * self.psfstacks[filter_key][1].data.shape[1]
+                size = self.psfstacks[filter_key][1].data.shape[1] if self.psfstacks[filter_key][1].data.shape[1] > self.psfstacks[filter_key][1].data.shape[2] else self.psfstacks[filter_key][1].data.shape[2]
+                fov = np.round(np.sqrt(self.psfstacks[filter_key][1].header['PIXAR_A2']), 3) * size
                 detector = self.psfstacks[filter_key][0].header['DETECTOR']
                 filter = self.psfstacks[filter_key][0].header['FILTER']
 
@@ -104,6 +126,13 @@ class PSFDatasetGPU_Base(nn.Module):
             print(f'{save_folder}/{pid}.pth') 
             os.makedirs(save_folder, exist_ok=True)
             torch.save(dataset_dict_arr, f'{save_folder}/{pid}.pth')
+
+    def forward(self, 
+                save_folder:str='/data/scratch/bariskurtkaya/dataset/torch_dataset', 
+                pid:str='test',
+                instrume:str='NIRCAM') -> None:
+        
+        self.prepare_dataset(save_folder, pid, instrume)
 
     def __nan_elimination(self, psf):
         return torch.nan_to_num(psf)
@@ -183,6 +212,63 @@ class PSFDatasetGPU_Base(nn.Module):
         del ra, dec, u_ra, u_dec, coord, width, height, query_results, min_idx, target_star, distance, one_pix_side_length_arcsec
         return torch.from_numpy(np.floor(max_pixel_distance.value.astype(np.float32))), torch.from_numpy(np.ceil(min_pixel_distance.value.astype(np.float32)))
 
+class PSFDatasetGPU_Injection(nn.Module):
+    def __init__(self, flux_coefficients=[1e-3, 1e-9], save_folder='/data/scratch/bariskurtkaya/dataset/torch_dataset_injection', device='cuda:0'):
+        super().__init__()
+
+        self.flux_coef = flux_coefficients
+        self.save_folder = save_folder
+        self.DEVICE = device
+
+        os.makedirs(self.save_folder, exist_ok=True)
+
+    def __sample_flux(self, num_flux):
+        flux_tensor = torch.randint(num_flux, (num_flux,)).to(self.DEVICE) / num_flux
+        flux_tensor = flux_tensor * (self.flux_coef[0] - self.flux_coef[1]) + self.flux_coef[1]
+        return flux_tensor.view(-1, 1, 1)
+
+    def __injection_item_GPU(self, psf_dict, batch, num_injection):
+        # Will be refactored (crop , (points))
+        generated_psfs = torch.cat([self.modified_crop(psf_dict['generated_psf'])[0].unsqueeze(0) for _ in range(num_injection*batch)], dim=0).to(self.DEVICE) # NI*B x Hg x Wg
+
+        flux_tensor = self.__sample_flux(num_injection*batch).repeat(1, generated_psfs.shape[1], generated_psfs.shape[2]) # NI*B
+
+        psf_dict['psfs'] = psf_dict['psfs'].repeat_interleave(num_injection, dim=0) # NI*B x Hp x Wp
+        psf_integral = torch.sum(psf_dict['psfs'], dim=(1,2)).view(-1, 1, 1).repeat(1, generated_psfs.shape[1], generated_psfs.shape[2]) # NI*B
+
+        generated_psfs = generated_psfs * flux_tensor * psf_integral # NI*B x Hg x Wg
+        
+        pad_h = generated_psfs.shape[1] - psf_dict['psfs'].shape[1]
+        pad_w = generated_psfs.shape[2] - psf_dict['psfs'].shape[2]
+
+        psf_dict['psfs'] = torch.nn.functional.pad(psf_dict['psfs'], pad=(pad_w//2, pad_w//2, pad_h//2, pad_h//2), mode='replicate') # NI*B x Hg x Wg
+
+        injections = psf_dict['psfs'] + generated_psfs
+
+        torch.save(injections, f"{self.save_folder}/{psf_dict['filter_key']}.pth")
+        del generated_psfs, flux_tensor, psf_integral
+
+    @timing
+    def injection_GPU(self, psf_paths, num_injection=10):
+        psf_dicts = [torch_psf for psf_path in psf_paths for torch_psf in torch.load(psf_path)]
+
+        old_height = 0
+        for psf_dict in tqdm(psf_dicts):
+            psf_dict['psfs'] = psf_dict['psfs'].to(self.DEVICE) # B x Hp x Wp
+            psf_dict['generated_psf'] = psf_dict['generated_psf'].to(self.DEVICE) # Hg x Wg
+
+            batch, _, _ = psf_dict['psfs'].shape
+            height, _ = psf_dict['generated_psf'].shape
+            if old_height != height:
+                self.modified_crop =  ModifiedRandomCrop(height//2)
+
+            self.__injection_item_GPU(psf_dict, batch, num_injection)
+
+            old_height = height
+        
+    def forward(self, psf_paths, num_injection=20):
+        self.injection_GPU(psf_paths, num_injection)
+
 
 @timing
 def main():
@@ -195,14 +281,14 @@ def main():
     
     instrume: str = 'NIRCAM'
 
-    injection_GPU = PSFDatasetGPU_Base(psf_directory='')
+    datasetGPU_base = PSFDatasetGPU_Base(psf_directory='')
 
     for pid in pids:
         psf_directory = f'/data/scratch/bariskurtkaya/dataset/{instrume}/{pid}/mastDownload/JWST/'
 
         try:
-            injection_GPU.psf_directory = psf_directory
-            injection_GPU.prepare_dataset(
+            datasetGPU_base.psf_directory = psf_directory
+            datasetGPU_base.prepare_dataset(
                 save_folder=save_folder,
                 pid=pid,
                 instrume=instrume
@@ -213,5 +299,21 @@ def main():
             raise Exception
 
 
+def main_v2():
+    seed_everything(42)
+
+    psf_directory = f'/data/scratch/bariskurtkaya/dataset/torch_dataset'
+    psf_paths = glob(f'{psf_directory}/*.pth')
+
+    injection_GPU = PSFDatasetGPU_Injection()
+
+    # try:
+    injection_GPU.injection_GPU(psf_paths, num_injection=20)
+    # except Exception as err:
+    #     print(err)
+
 if __name__ == '__main__':
-    main()
+    if FIRST_STEP == True:
+        main()
+    else:
+        main_v2()
