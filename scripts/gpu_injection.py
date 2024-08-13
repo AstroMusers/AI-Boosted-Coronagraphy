@@ -30,27 +30,17 @@ from src.utils.time import timing
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 
-class InjectionGPU(nn.Module):
+class PSFDatasetGPU_Base(nn.Module):
     @timing
     def __init__(self, 
-                psf_directory: str, 
-                # is_save_original:bool, 
-                # is_save_augmented:bool, 
-                # is_save_injected:bool,
+                psf_directory: str,
                 device='cuda:0') -> None:
         super().__init__()
 
         self.psf_directory = psf_directory
-        # self.is_save_original = is_save_original
-        # self.is_save_augmented = is_save_augmented
-        # self.is_save_injected = is_save_injected
         self.DEVICE = device
 
         self.get_exoplanet_extremes()
-
-        # self.psfstacks_nircam_dirs = get_stage3_products(suffix='psfstack', directory=self.psf_directory)
-        # self.psfstacks = {}
-        # self.__create_psfstacks_dict()
 
     def get_exoplanet_extremes(self):
         query_exoplanets = NasaExoplanetArchive.query_criteria(
@@ -72,9 +62,9 @@ class InjectionGPU(nn.Module):
         self.psfstacks = {}
         self.__create_psfstacks_dict()
 
-        if self.psfstacks.keys() == []:
+        if len(self.psfstacks.keys()) == 0:
             print('No PSF Stack has been found!')
-
+        
         else:
             for filter_key in self.psfstacks.keys():
                 max_pixel_distance, min_pixel_distance = self.__get_max_min_pixel_distance(self.psfstacks[filter_key])
@@ -109,14 +99,11 @@ class InjectionGPU(nn.Module):
                         'pid': pid,
                         'instrume': instrume
                     }
-                )
+                )                
             
-            print(f'{save_folder}/{pid}.ckpt')
+            print(f'{save_folder}/{pid}.pth') 
             os.makedirs(save_folder, exist_ok=True)
-            torch.save(dataset_dict_arr, f'{save_folder}/{pid}.ckpt')
-
-    def forward(self, num_injection:int=10, num_flux:int=10, flux_coef= [1e-3, 1e-9]) -> None:
-        pass
+            torch.save(dataset_dict_arr, f'{save_folder}/{pid}.pth')
 
     def __nan_elimination(self, psf):
         return torch.nan_to_num(psf)
@@ -194,11 +181,11 @@ class InjectionGPU(nn.Module):
             distance.to(u.au) * np.tan(one_pix_side_length_arcsec))
 
         del ra, dec, u_ra, u_dec, coord, width, height, query_results, min_idx, target_star, distance, one_pix_side_length_arcsec
-        return np.floor(max_pixel_distance.value), np.ceil(min_pixel_distance.value)
+        return torch.from_numpy(np.floor(max_pixel_distance.value.astype(np.float32))), torch.from_numpy(np.ceil(min_pixel_distance.value.astype(np.float32)))
 
 
-if __name__ == '__main__':
-    
+@timing
+def main():
     seed_everything(42)
     
     data_path = '/data/scratch/bariskurtkaya/dataset/NIRCAM'
@@ -208,7 +195,7 @@ if __name__ == '__main__':
     
     instrume: str = 'NIRCAM'
 
-    injection_GPU = InjectionGPU(psf_directory='')
+    injection_GPU = PSFDatasetGPU_Base(psf_directory='')
 
     for pid in pids:
         psf_directory = f'/data/scratch/bariskurtkaya/dataset/{instrume}/{pid}/mastDownload/JWST/'
@@ -225,3 +212,6 @@ if __name__ == '__main__':
             print(f'Error: {err}')
             raise Exception
 
+
+if __name__ == '__main__':
+    main()
