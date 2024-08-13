@@ -227,26 +227,30 @@ class PSFDatasetGPU_Injection(nn.Module):
         flux_tensor = flux_tensor * (self.flux_coef[0] - self.flux_coef[1]) + self.flux_coef[1]
         return flux_tensor.view(-1, 1, 1)
 
-    def __injection_item_GPU(self, psf_dict, batch, num_injection):
+    def __injection_item_GPU(self, psf_dict, batch, num_injection, sub_batch_idx):
+        psf_gen = psf_dict['generated_psf']
+        psfs = psf_dict['psfs'][sub_batch_idx*batch:(sub_batch_idx+1)*batch].to(self.DEVICE)
+
         # Will be refactored (crop , (points))
-        generated_psfs = torch.cat([self.modified_crop(psf_dict['generated_psf'])[0].unsqueeze(0) for _ in range(num_injection*batch)], dim=0).to(self.DEVICE) # NI*B x Hg x Wg
+        generated_psfs = torch.cat([self.modified_crop(psf_gen)[0].unsqueeze(0) for _ in range(num_injection*batch)], dim=0).to(self.DEVICE) # NI*B x Hg x Wg
 
         flux_tensor = self.__sample_flux(num_injection*batch).repeat(1, generated_psfs.shape[1], generated_psfs.shape[2]) # NI*B
 
-        psf_dict['psfs'] = psf_dict['psfs'].repeat_interleave(num_injection, dim=0) # NI*B x Hp x Wp
-        psf_integral = torch.sum(psf_dict['psfs'], dim=(1,2)).view(-1, 1, 1).repeat(1, generated_psfs.shape[1], generated_psfs.shape[2]) # NI*B
+        psfs = psfs.repeat_interleave(num_injection, dim=0) # NI*B x Hp x Wp
+        psf_integral = torch.sum(psfs, dim=(1,2)).view(-1, 1, 1).repeat(1, generated_psfs.shape[1], generated_psfs.shape[2]) # NI*B
 
         generated_psfs = generated_psfs * flux_tensor * psf_integral # NI*B x Hg x Wg
         
-        pad_h = generated_psfs.shape[1] - psf_dict['psfs'].shape[1]
-        pad_w = generated_psfs.shape[2] - psf_dict['psfs'].shape[2]
+        pad_h = generated_psfs.shape[1] - psfs.shape[1]
+        pad_w = generated_psfs.shape[2] - psfs.shape[2]
 
-        psf_dict['psfs'] = torch.nn.functional.pad(psf_dict['psfs'], pad=(pad_w//2, pad_w//2, pad_h//2, pad_h//2), mode='replicate') # NI*B x Hg x Wg
+        psfs = torch.nn.functional.pad(psfs, pad=(pad_w//2, pad_w//2, pad_h//2, pad_h//2), mode='replicate') # NI*B x Hg x Wg
 
-        injections = psf_dict['psfs'] + generated_psfs
+        injections = psfs + generated_psfs
 
-        torch.save(injections, f"{self.save_folder}/{psf_dict['filter_key']}.pth")
-        del generated_psfs, flux_tensor, psf_integral
+        torch.save(injections, f"{self.save_folder}/{psf_dict['filter_key']}_{sub_batch_idx}.pth")
+        del generated_psfs, flux_tensor, psfs, injections, psf_gen, psf_integral
+
 
     @timing
     def injection_GPU(self, psf_paths, num_injection=10):
@@ -254,19 +258,26 @@ class PSFDatasetGPU_Injection(nn.Module):
 
         old_height = 0
         for psf_dict in tqdm(psf_dicts):
-            psf_dict['psfs'] = psf_dict['psfs'].to(self.DEVICE) # B x Hp x Wp
-            psf_dict['generated_psf'] = psf_dict['generated_psf'].to(self.DEVICE) # Hg x Wg
+            psf_dict['psfs'] = psf_dict['psfs'].to('cpu') # B x Hp x Wp
+            psf_dict['generated_psf'] = psf_dict['generated_psf'].to('cpu') # Hg x Wg
 
             batch, _, _ = psf_dict['psfs'].shape
             height, _ = psf_dict['generated_psf'].shape
+
             if old_height != height:
                 self.modified_crop =  ModifiedRandomCrop(height//2)
-
-            self.__injection_item_GPU(psf_dict, batch, num_injection)
+            
+            vram_consumption = int(batch * num_injection * height * height // (2*1e+9))
+            if (vram_consumption > 1):
+                sub_batch_size = int(np.ceil(batch // vram_consumption))
+                for idx in range(vram_consumption):
+                    self.__injection_item_GPU(psf_dict, sub_batch_size, num_injection, sub_batch_idx=idx)
+            else:
+                self.__injection_item_GPU(psf_dict, batch, num_injection, sub_batch_idx=0)
 
             old_height = height
         
-    def forward(self, psf_paths, num_injection=20):
+    def forward(self, psf_paths, num_injection=10):
         self.injection_GPU(psf_paths, num_injection)
 
 
@@ -308,7 +319,7 @@ def main_v2():
     injection_GPU = PSFDatasetGPU_Injection()
 
     # try:
-    injection_GPU.injection_GPU(psf_paths, num_injection=20)
+    injection_GPU.injection_GPU(psf_paths, num_injection=10)
     # except Exception as err:
     #     print(err)
 
