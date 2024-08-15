@@ -38,7 +38,7 @@ FIRST_STEP = False
 class ModifiedRandomCrop(v2.RandomCrop):
     def __init__(self, size, padding=None, pad_if_needed=False, fill=0, padding_mode='constant'):
         super().__init__(size, padding=padding, pad_if_needed=pad_if_needed, fill=fill, padding_mode=padding_mode)
-    
+
     def _transform(self, inpt, params):
         if params["needs_pad"]:
             fill = self._get_fill(self._fill, type(inpt))
@@ -49,7 +49,8 @@ class ModifiedRandomCrop(v2.RandomCrop):
                 v2.functional.crop, inpt, top=params["top"], left=params["left"], height=params["height"], width=params["width"]
             )
 
-        return inpt, (params["top"], params["left"], params["top"]+params["height"], params["left"]+params["width"])
+        return inpt.unsqueeze(0), torch.Tensor([np.ceil(params["left"]+params["width"]//2), np.ceil(params["top"]+params["height"]//2)])
+
 
 class PSFDatasetGPU_Base(nn.Module):
     @timing
@@ -231,8 +232,9 @@ class PSFDatasetGPU_Injection(nn.Module):
         psf_gen = psf_dict['generated_psf']
         psfs = psf_dict['psfs'][sub_batch_idx*batch:(sub_batch_idx+1)*batch].to(self.DEVICE)
 
-        # Will be refactored (crop , (points))
-        generated_psfs = torch.cat([self.modified_crop(psf_gen)[0].unsqueeze(0) for _ in range(num_injection*batch)], dim=0).to(self.DEVICE) # NI*B x Hg x Wg
+        # Will be refactored [crop , [center_x, center_y]]
+        generated_psfs, locations = list(zip(*[self.modified_crop(psf_gen) for _ in range(num_injection*batch)])) # NI*B x H x W - (x, y)
+        generated_psfs = torch.cat(generated_psfs, dim=0).to(self.DEVICE)
 
         flux_tensor = self.__sample_flux(num_injection*batch).repeat(1, generated_psfs.shape[1], generated_psfs.shape[2]) # NI*B
 
@@ -248,9 +250,7 @@ class PSFDatasetGPU_Injection(nn.Module):
 
         injections = psfs + generated_psfs
 
-        torch.save(injections, f"{self.save_folder}/{psf_dict['filter_key']}_{sub_batch_idx}.pth")
-        del generated_psfs, flux_tensor, psfs, injections, psf_gen, psf_integral
-
+        torch.save((injections.cpu(), locations, flux_tensor.cpu()), f"{self.save_folder}/{psf_dict['filter_key']}_{sub_batch_idx}.pth")
 
     @timing
     def injection_GPU(self, psf_paths, num_injection=10):
@@ -267,6 +267,7 @@ class PSFDatasetGPU_Injection(nn.Module):
             if old_height != height:
                 self.modified_crop =  ModifiedRandomCrop(height//2)
             
+            # VRAM_Consumption Variable Chosen for RTX A6000
             vram_consumption = int(batch * num_injection * height * height // (2*1e+9))
             if (vram_consumption > 1):
                 sub_batch_size = int(np.ceil(batch // vram_consumption))
@@ -318,10 +319,10 @@ def main_v2():
 
     injection_GPU = PSFDatasetGPU_Injection()
 
-    # try:
-    injection_GPU.injection_GPU(psf_paths, num_injection=10)
-    # except Exception as err:
-    #     print(err)
+    try:
+        injection_GPU.injection_GPU(psf_paths, num_injection=10)
+    except Exception as err:
+        print(err)
 
 if __name__ == '__main__':
     if FIRST_STEP == True:
