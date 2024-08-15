@@ -236,7 +236,8 @@ class PSFDatasetGPU_Injection(nn.Module):
         generated_psfs, locations = list(zip(*[self.modified_crop(psf_gen) for _ in range(num_injection*batch)])) # NI*B x H x W - (x, y)
         generated_psfs = torch.cat(generated_psfs, dim=0).to(self.DEVICE)
 
-        flux_tensor = self.__sample_flux(num_injection*batch).repeat(1, generated_psfs.shape[1], generated_psfs.shape[2]) # NI*B
+        flux_vector = self.__sample_flux(num_injection*batch) # NI*B 
+        flux_tensor = flux_vector.repeat(1, generated_psfs.shape[1], generated_psfs.shape[2]) # NI*B x H x W
 
         psfs = psfs.repeat_interleave(num_injection, dim=0) # NI*B x Hp x Wp
         psf_integral = torch.sum(psfs, dim=(1,2)).view(-1, 1, 1).repeat(1, generated_psfs.shape[1], generated_psfs.shape[2]) # NI*B
@@ -250,7 +251,7 @@ class PSFDatasetGPU_Injection(nn.Module):
 
         injections = psfs + generated_psfs
 
-        torch.save((injections.cpu(), locations, flux_tensor.cpu()), f"{self.save_folder}/{psf_dict['filter_key']}_{sub_batch_idx}.pth")
+        torch.save((injections.cpu(), locations, flux_vector.cpu()), f"{self.save_folder}/{psf_dict['filter_key']}_{sub_batch_idx}.pth")
 
     @timing
     def injection_GPU(self, psf_paths, num_injection=10):
