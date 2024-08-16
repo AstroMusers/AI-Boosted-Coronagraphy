@@ -29,6 +29,7 @@ from src.utils.seed import seed_everything
 from src.utils.time import timing
 
 from torchvision.transforms import v2
+from torchvision.transforms.v2._utils import query_size
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 torch.set_warn_always(True)
@@ -38,7 +39,7 @@ FIRST_STEP = False
 class ModifiedRandomCrop(v2.RandomCrop):
     def __init__(self, size, padding=None, pad_if_needed=False, fill=0, padding_mode='constant'):
         super().__init__(size, padding=padding, pad_if_needed=pad_if_needed, fill=fill, padding_mode=padding_mode)
-
+        
     def _transform(self, inpt, params):
         if params["needs_pad"]:
             fill = self._get_fill(self._fill, type(inpt))
@@ -236,7 +237,7 @@ class PSFDatasetGPU_Injection(nn.Module):
         generated_psfs, locations = list(zip(*[self.modified_crop(psf_gen) for _ in range(num_injection*batch)])) # NI*B x H x W - (x, y)
         generated_psfs = torch.cat(generated_psfs, dim=0).to(self.DEVICE)
 
-        flux_vector = self.__sample_flux(num_injection*batch) # NI*B 
+        flux_vector = self.__sample_flux(num_injection*batch) # NI*B x 1 x 1
         flux_tensor = flux_vector.repeat(1, generated_psfs.shape[1], generated_psfs.shape[2]) # NI*B x H x W
 
         psfs = psfs.repeat_interleave(num_injection, dim=0) # NI*B x Hp x Wp
@@ -251,16 +252,21 @@ class PSFDatasetGPU_Injection(nn.Module):
 
         injections = psfs + generated_psfs
 
-        torch.save((injections.cpu(), locations, flux_vector.cpu()), f"{self.save_folder}/{psf_dict['filter_key']}_{sub_batch_idx}.pth")
+        torch.save((injections.cpu(), torch.stack(locations).cpu(), flux_vector.view(-1).cpu()), f"{self.save_folder}/{psf_dict['filter_key']}_{sub_batch_idx}.pth")
 
     @timing
-    def injection_GPU(self, psf_paths, num_injection=10):
+    def injection_GPU(self, psf_paths, num_injection=10, max_size=None):
         psf_dicts = [torch_psf for psf_path in psf_paths for torch_psf in torch.load(psf_path)]
 
         old_height = 0
         for psf_dict in tqdm(psf_dicts):
-            psf_dict['psfs'] = psf_dict['psfs'].to('cpu') # B x Hp x Wp
-            psf_dict['generated_psf'] = psf_dict['generated_psf'].to('cpu') # Hg x Wg
+
+            if max_size != None:
+                center_crop = v2.CenterCrop(max_size)
+                psf_dict['psfs'] = center_crop(psf_dict['psfs'])
+                center_crop = v2.CenterCrop(max_size*2)
+                psf_dict['generated_psf'] = center_crop(psf_dict['generated_psf'])
+
 
             batch, _, _ = psf_dict['psfs'].shape
             height, _ = psf_dict['generated_psf'].shape
@@ -279,8 +285,8 @@ class PSFDatasetGPU_Injection(nn.Module):
 
             old_height = height
         
-    def forward(self, psf_paths, num_injection=10):
-        self.injection_GPU(psf_paths, num_injection)
+    def forward(self, psf_paths, num_injection=10, max_size=None):
+        self.injection_GPU(psf_paths, num_injection, max_size)
 
 
 @timing
@@ -311,7 +317,6 @@ def main():
             print(f'Error: {err}')
             raise Exception
 
-
 def main_v2():
     seed_everything(42)
 
@@ -321,7 +326,7 @@ def main_v2():
     injection_GPU = PSFDatasetGPU_Injection()
 
     try:
-        injection_GPU.injection_GPU(psf_paths, num_injection=10)
+        injection_GPU.injection_GPU(psf_paths, num_injection=10, max_size=256)
     except Exception as err:
         print(err)
 
