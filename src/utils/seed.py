@@ -3,6 +3,9 @@ import os
 import random
 import torch 
 
+from accelerate.utils import set_seed
+
+
 # this function guarantees reproductivity
 # other packages also support seed options, you can add to this function
 def seed_everything(TORCH_SEED):
@@ -13,3 +16,5 @@ def seed_everything(TORCH_SEED):
 	torch.cuda.manual_seed_all(TORCH_SEED)
 	torch.backends.cudnn.deterministic = True
 	torch.backends.cudnn.benchmark = False
+
+	set_seed(TORCH_SEED)

@@ -52,7 +52,6 @@ class ModifiedRandomCrop(v2.RandomCrop):
 
         return inpt.unsqueeze(0), torch.Tensor([np.ceil(params["left"]+params["width"]//2), np.ceil(params["top"]+params["height"]//2)])
 
-
 class PSFDatasetGPU_Base(nn.Module):
     @timing
     def __init__(self, 
@@ -252,7 +251,7 @@ class PSFDatasetGPU_Injection(nn.Module):
 
         injections = psfs + generated_psfs
 
-        torch.save((injections.cpu(), torch.stack(locations).cpu(), flux_vector.view(-1).cpu()), f"{self.save_folder}/{psf_dict['filter_key']}_{sub_batch_idx}.pth")
+        torch.save((injections.cpu(), torch.stack(locations).cpu(), flux_vector.view(-1).cpu()), f"{self.save_folder}/injection_{psf_dict['filter_key']}_{sub_batch_idx}.pth")
 
     @timing
     def injection_GPU(self, psf_paths, num_injection=10, max_size=None):
@@ -284,6 +283,8 @@ class PSFDatasetGPU_Injection(nn.Module):
                 self.__injection_item_GPU(psf_dict, batch, num_injection, sub_batch_idx=0)
 
             old_height = height
+
+            torch.save(psf_dict['psfs'].cpu(),  f"{self.save_folder}/base_{psf_dict['filter_key']}.pth")
         
     def forward(self, psf_paths, num_injection=10, max_size=None):
         self.injection_GPU(psf_paths, num_injection, max_size)
