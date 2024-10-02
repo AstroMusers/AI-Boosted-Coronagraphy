@@ -22,5 +22,5 @@ checkpoints/
 *.pdf
 *.gz
 
-test*.ipynb
 data/
+checkpoints/
