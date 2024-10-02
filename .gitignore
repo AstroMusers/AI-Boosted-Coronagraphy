@@ -2,6 +2,8 @@
 */__pycache__/
 */.ipynb_checkpoints/
 
+checkpoints/
+
 *.csv
 *.pyc
 *.json
@@ -20,5 +22,5 @@
 *.pdf
 *.gz
 
-test.ipynb
+test*.ipynb
 data/

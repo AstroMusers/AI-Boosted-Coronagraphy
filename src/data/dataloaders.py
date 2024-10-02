@@ -39,12 +39,12 @@ class SynDatasetLabel(Dataset):
 
         return batch
 
-class SynthDataset(Dataset):
-    def __init__(self, dataset_path='/data/scratch/bariskurtkaya/dataset/torch_dataset_injection', num_injection=10):
+class SynthDatasetv2(Dataset):
+    def __init__(self, dataset_path='/data/scratch/bariskurtkaya/dataset/torch_dataset_injection/', data_type='train', num_injection=10):
         psf_dicts = []
         labels = []
 
-        psf_paths = glob.glob(os.path.join(dataset_path, '*.pth'))
+        psf_paths = glob.glob(os.path.join(dataset_path, data_type, '*.pth'))
 
         for psf_path in psf_paths:
             torch_psf = torch.load(psf_path, weights_only=False)
@@ -54,7 +54,7 @@ class SynthDataset(Dataset):
                 labels.append(torch.ones(torch_psf[0].shape[0]))
             else:
                 psf_dicts.append(torch_psf.repeat(num_injection, 1, 1))
-                labels.append(torch.ones(torch_psf.shape[0]*num_injection))
+                labels.append(torch.zeros(torch_psf.shape[0]*num_injection))
 
         self.psf_dicts = torch.cat(psf_dicts)
         self.labels = torch.cat(labels)

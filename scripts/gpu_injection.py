@@ -50,7 +50,7 @@ class ModifiedRandomCrop(v2.RandomCrop):
                 v2.functional.crop, inpt, top=params["top"], left=params["left"], height=params["height"], width=params["width"]
             )
 
-        return inpt.unsqueeze(0), torch.Tensor([np.ceil(params["left"]+params["width"]//2), np.ceil(params["top"]+params["height"]//2)])
+        return inpt.unsqueeze(0), torch.Tensor([np.ceil(params["width"] - params["left"]), np.ceil(params["height"] - params["top"])])
 
 class PSFDatasetGPU_Base(nn.Module):
     @timing
@@ -324,7 +324,7 @@ def main_v2():
     psf_directory = f'/data/scratch/bariskurtkaya/dataset/torch_dataset'
     psf_paths = glob(f'{psf_directory}/*.pth')
 
-    injection_GPU = PSFDatasetGPU_Injection()
+    injection_GPU = PSFDatasetGPU_Injection(flux_coefficients=[1e-2, 1e-5])
 
     try:
         injection_GPU.injection_GPU(psf_paths, num_injection=10, max_size=256)

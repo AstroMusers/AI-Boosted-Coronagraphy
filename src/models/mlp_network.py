@@ -45,3 +45,4 @@ class MLPNetwork(nn.Module):
         pred = self.forward(x)
         acc = (pred.argmax(1) == gt).type(torch.float).sum().item()
         return acc
+

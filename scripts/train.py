@@ -31,7 +31,7 @@ def train_epoch(model, train_loader, optimizer, accelerator):
     return batch_loss / len(train_loader)
 
 @timing
-def main(num_epochs=200, batch_size=2**6, learning_rate=1e-3):
+def main(num_epochs=1, batch_size=2**8, learning_rate=1e-3):
     sd.seed_everything(42)
 
     accelerator = Accelerator()
