@@ -16,8 +16,6 @@ from src.data.dataloaders import SynDatasetLabel
 from src.models.exo_classifier import ExoClassifier
 
 
-
-
 def train_arg_parser():
 
     parser = argparse.ArgumentParser()
@@ -49,7 +47,6 @@ def get_arc_params():
     convdim_outputs = calculate_conv_dims(80,paddings_enc,kernels_enc,strides_enc,maxpool)
 
     return convdim_outputs, kernels_enc, strides_enc
-
 
 def get_paths(args):
 

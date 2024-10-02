@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
 
+import torch
+import torch.nn as nn
+from torchvision.transforms import v2
 
 class Augmentation():
     def __init__(self):
@@ -21,6 +24,25 @@ class Augmentation():
     def shift(self, img, right_shift, down_shift):
         # print("Shift")
         return np.roll(np.roll(img, right_shift, axis=1), down_shift, axis=0)
+
+
+class AugmentationGPU(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.transforms = v2.Compose(
+            [
+                v2.RandomRotation(degrees=[0,90,180,270]),
+                v2.RandomVerticalFlip(p=0.5),
+                v2.RandomHorizontalFlip(p=0.5)
+            ]
+        )
+    
+    def forward(self, x):
+        B, C, H, W = x.shape
+        x = self.transforms(x)
+        return x
+
 
 def load_csv(filepath):
     return pd.read_csv(filepath)

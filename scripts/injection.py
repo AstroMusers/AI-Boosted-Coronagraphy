@@ -63,7 +63,6 @@ class Injection():
             max_pix = int(1.5 / pix_per_arcsec)
             size    = 80
             
-
             detector = self.psfstacks[filter_key][0].header['DETECTOR']
             filter = self.psfstacks[filter_key][0].header['FILTER']
 
