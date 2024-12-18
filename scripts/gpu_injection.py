@@ -209,6 +209,9 @@ class PSFDatasetGPU_Base(nn.Module):
             distance.to(u.au) * np.tan(one_pix_side_length_arcsec))
         min_pixel_distance = self.exoplanet_extremes['min'] / (
             distance.to(u.au) * np.tan(one_pix_side_length_arcsec))
+        
+        # Override
+        max_pixel_distance = 50 if max_pixel_distance > 50 else max_pixel_distance
 
         del ra, dec, u_ra, u_dec, coord, width, height, query_results, min_idx, target_star, distance, one_pix_side_length_arcsec
         return torch.from_numpy(np.floor(max_pixel_distance.value.astype(np.float32))), torch.from_numpy(np.ceil(min_pixel_distance.value.astype(np.float32)))
