@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 from itertools import product
 import numpy as np
 import os
-import wandb
 import argparse
 import yaml
 import astropy.io.fits as fits
@@ -23,6 +22,8 @@ def plot_correlation_matrix(dataframe):
     plt.show()
 
 def init_wandb(args):
+    import wandb
+
     group_name, exp_name = args.idx.split('/')
     wandb.init(
     mode =   'online'if args.wandb else 'disabled',

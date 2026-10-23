@@ -1,5 +1,6 @@
 import os
 import glob
+import inspect
 import sys
 
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
@@ -24,8 +25,8 @@ class CoronPipeline():
     def __init__(self, proposal_id: str, instrume: INSTRUME):
         print(
             f"coron_pipeline.py script activated. Current JWST Version: {jwst.__version__}")
-        os.environ["CRDS_PATH"] = '/home/sarperyn/crds_cache/jwst_ops'
-        os.environ["CRDS_SERVER_URL"] = 'https://jwst-crds.stsci.edu'
+        os.environ.setdefault("CRDS_PATH", os.path.join(os.path.expanduser("~"), "crds_cache", "jwst_ops"))
+        os.environ.setdefault("CRDS_SERVER_URL", "https://jwst-crds.stsci.edu/")
 
         self.instrume = instrume
         self.proposal_id = proposal_id
@@ -108,7 +109,9 @@ class CoronPipeline():
         pool_df.to_csv(
             f'calints_{self.instrume}_{self.proposal_id}_pool.csv', index=False)
 
-        asn_coron_rule_dir = '/home/sarperyn/.conda/envs/jwst-dev/lib/python3.9/site-packages/jwst/associations/lib/rules_level3.py'
+        asn_coron_rule_dir = inspect.getsourcefile(Asn_Lv3Coron)
+        if asn_coron_rule_dir is None:
+            raise RuntimeError("Could not locate the installed JWST level-3 association rules.")
         registry = AssociationRegistry(
             [asn_coron_rule_dir], include_default=False)
 

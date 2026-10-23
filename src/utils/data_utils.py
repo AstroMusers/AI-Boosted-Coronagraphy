@@ -3,7 +3,6 @@ import pandas as pd
 
 import torch
 import torch.nn as nn
-from torchvision.transforms import v2
 
 class Augmentation():
     def __init__(self):
@@ -29,6 +28,7 @@ class Augmentation():
 class AugmentationGPU(nn.Module):
     def __init__(self):
         super().__init__()
+        from torchvision.transforms import v2
 
         self.transforms = v2.Compose(
             [

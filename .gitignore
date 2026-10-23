@@ -23,4 +23,5 @@ checkpoints/
 *.gz
 
 data/
+visuals/
 checkpoints/

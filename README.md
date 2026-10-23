@@ -1,44 +1,29 @@
 # AI-Boosted-Coronagraphy
 
 
-# Introduction
+Coronagraphy asks us to find faint signals beside stars bright enough to drown them out. We use AI methods and JWST coronagraphic data workflows to explore that contrast problem. This guide covers the reference files and MAST access needed by the scripts.
 
-## Requirements
+## Environment setup
 
-## Environment Configurations
+Set `AI_BOOSTED_CORONAGRAPHY_PATH` to the checkout directory when the repository is not imported from its default location. If it is unset, the utilities use the checkout containing `src/utils/variable_utils.py`. Dataset inputs live under the ignored `data/` directory, and generated figures belong under the ignored `visuals/` directory.
 
-To use scripts in this repository, you must add the following environment variables in bashrc file.
+Most JWST workflows need files from the Calibration Reference Data System (CRDS). These settings tell JWST where to cache them and which server to query. Add them to your Bash startup file if you want them in new shells, or export them directly in the shell you are using.
 
-To open your environment.
-`$ nano ~/.bashrc`
+```bash
+mkdir -p "$HOME/crds_cache/jwst_ops"
+export CRDS_PATH="$HOME/crds_cache/jwst_ops"
+export CRDS_SERVER_URL="https://jwst-crds.stsci.edu/"
+```
 
-Environment variables that you need to add in bashrc.
-`export CRDS_PATH=$HOME/crds_cache/jwst_ops`
-`export CRDS_SERVER_URL=https://jwst-crds.stsci.edu/`
+To keep these settings in Bash, add the exports to `~/.bashrc` and reload it with `source ~/.bashrc`. `scripts/coron_pipeline.py` respects existing `CRDS_PATH` and `CRDS_SERVER_URL` values, and otherwise uses the defaults above.
 
-Reinitialization of environment variables.
-`$ source ~/.bashrc`
+## MAST access
 
+Some scripts query the Mikulski Archive for Space Telescopes (MAST). They read your token from `src/secrets/mast_token.txt`. Keep the token out of source code and never commit it. The `src/secrets/` directory is ignored by Git. Create the file and add your token as its first line:
 
-## Folders Configurations
+```bash
+mkdir -p src/secrets
+touch src/secrets/mast_token.txt
+```
 
-### CRDS and JWST folder
-
-To use pipeline you need to initialize the command line codes in section below.
-
-`$ mkdir /home/bariskurtkaya/crds_cache`
-`$ mkdir /home/bariskurtkaya/crds_cache/jwst_ops`
-
-### Secrets Folder
-
-Due to security of api tokens, this repo have scripts that gets the api tokens from secrets folder instead collecting in script. Thus, the steps must be done before activating the scripts which shown below.
-
-1. Create a secrets folder in main repository directory. 
-`$ mkdir secrets`
-
-2. Create txt files, which are mandatory, in secrets folder. 
-`$ touch mast_token.txt`
-
-3. Then you must add your token without any addition in mast_token txt file
-
-Further information for mast token: [Mast Authentication Website](https://auth.mast.stsci.edu/info "Mast Authentication Website")
+For MAST authentication details, see the [MAST authentication website](https://auth.stsci.edu/info).

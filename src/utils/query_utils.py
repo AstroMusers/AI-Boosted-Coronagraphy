@@ -1,6 +1,6 @@
 import os
 import glob
-from src.utils import DATA_MAIN_DIR
+from .variable_utils import DATA_MAIN_DIR, get_repository_path
 
 
 def get_mast_token():
@@ -24,13 +24,7 @@ def get_util_main_dir():
     return os.path.realpath(__file__)
 
 def get_main_dir():
-    current_dir = get_util_main_dir()
-    current_dir = current_dir.split('/')
-    main_dir = '/'.join(current_dir[:-3])
-
-    del current_dir
-    print(main_dir)
-    return main_dir
+    return str(get_repository_path())
 
 def get_filename_from_dir(fits_dir):
     return '_'.join(fits_dir.split('/')[-1].split('_')[:-1])
