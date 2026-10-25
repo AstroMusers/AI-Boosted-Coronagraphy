@@ -3,10 +3,13 @@ import matplotlib.pyplot as plt
 import torch
 from torch.utils.data import DataLoader
 from torch.nn import functional as F
+import argparse
 import glob
 import os
 import sys
 import wandb
+import argparse
+import re
 import pandas as pd
 import random
 import seaborn as sns
@@ -14,6 +17,7 @@ from sklearn.metrics import auc, confusion_matrix, roc_curve
 from sklearn.metrics import f1_score
 from torchmetrics.classification import BinaryPrecisionRecallCurve
 from torchmetrics.classification import BinaryROC
+from tdpy.verbosity import print
 sys.path.append(os.path.dirname(os.getcwd()))
 from scripts.visualization_helpers import *
 
@@ -25,6 +29,12 @@ from src.utils.variable_utils import *
 from src.utils.viz_utils import *
 from src.data.dataloaders import SynDatasetLabel
 from src.models.exo_classifier import ExoClassifier
+from src.utils.query_utils import get_dataset_dir
+
+
+def _save_figure(path, **kwargs):
+    print(f"Writing to {path}...")
+    plt.savefig(path, **kwargs)
 
 
 def inference_arg_parser():
@@ -36,9 +46,15 @@ def inference_arg_parser():
     parser.add_argument('--test_size', type=int, default=1024)
     parser.add_argument('--apply_lowpass', action='store_true', help='If true apply low pass filter to the input images')
     parser.add_argument('--train_pids', type=str, default='1386', help='Choose the pids to train the model on (use * for all programs)')
-    parser.add_argument('--model_path', type=str, default='/data/scratch/sarperyurtseven/results/training_results/dospid/2/models/model.pt', help='Choose the model to test)')
+    parser.add_argument(
+        '--model_path',
+        type=str,
+        default=os.path.join(PLOT_SAVE_PATH, 'training_results', 'dospid', '2', 'models', 'model.pt'),
+        help='Choose the model to test)',
+    )
     parser.add_argument('--train_filters', type=str, default='*', help='Choose the filters to train the model on (f300m, f277w, f356w, f444w) (use * for all filters)')
     parser.add_argument('--mode', type=str, default='test', help='Choose the mode (train, test)')
+    parser.add_argument('--sanity_checks', action='store_true')
     args = parser.parse_args()
     return args
 
@@ -64,6 +80,7 @@ def get_model(model_dir, device):
                kernels=kernels_enc, 
                strides=strides_enc)
     
+    print(f"Reading from {model_dir}...")
     model = torch.load(model_dir, map_location=device)
     
     return model
@@ -85,45 +102,30 @@ def plot_confusion_matrix(targets, preds, save_path):
     print("F1 score:", f1)
     print("Confusion Matrix:")
     print(cm)
-    plt.savefig(os.path.join(save_path, f'confusion_matrix.jpg'), format='jpg', pad_inches=0, dpi=200)
+    _save_figure(os.path.join(save_path, 'confusion_matrix.jpg'), format='jpg', pad_inches=0, dpi=200)
 
 def plot_precision_recall_curve(targets, probs, save_path):
 
     metric = BinaryPrecisionRecallCurve()
     metric.update(preds=probs, target=targets)
     fig, ax = metric.plot(score=True)
-    plt.savefig(os.path.join(save_path,'precision_recall_curve.jpg'))
+    _save_figure(os.path.join(save_path, 'precision_recall_curve.jpg'))
 
 def plot_roc_curve(targets, probs, save_path):
 
     metric = BinaryROC()
     metric.update(preds=probs, target=targets)
     fig_, ax_ = metric.plot(score=True)
-    plt.savefig(os.path.join(save_path,'roc_curve.jpg'))
+    _save_figure(os.path.join(save_path, 'roc_curve.jpg'))
 
-def get_test_paths():
+def get_test_paths(args):
+    return get_paths(args)
 
-    n = 2048
-    injected_1386     = glob.glob('/home/sarperyn/sarperyurtseven/1386_test/test_injt/*fc*.npy')
-    not_injected_1386 = glob.glob('/home/sarperyn/sarperyurtseven/1386_test/test_injt/*[!fc]*.npy')
-    not_injected_1386 = list(set(not_injected_1386) - set(injected_1386))
 
-    # injected_1194     = glob.glob('/home/sarperyn/sarperyurtseven/1194_test/*fc*.npy')
-    # not_injected_1194 = glob.glob('/home/sarperyn/sarperyurtseven/1194_test/**.npy')
-    # not_injected_1194 = list(set(injected_1194) - set(not_injected_1194))
+def _glob_paths(pattern):
+    print(f"Reading from {pattern}...")
+    return glob.glob(pattern)
 
-    print("INJECTED:",len(injected_1386))
-    print("NOT INJECTED:",len(not_injected_1386))
-    paths = []
-    for i in range(n):
-        paths.append(random.choice(injected_1386))
-    for i in range(n):
-        paths.append(random.choice(not_injected_1386))
-    #paths = injected + not_injected
-    random.shuffle(paths)
-    print("#Samples:",len(paths))
-
-    return paths
 
 def get_paths(args):
 
@@ -136,8 +138,8 @@ def get_paths(args):
 
         if len(train_filters) == 1:
             train_filters = train_filters[0]
-            injected     = glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{train_filters}*fc*.npy'))
-            not_injected = glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{train_filters}*[!fc].npy')) 
+            injected     = _glob_paths(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{train_filters}*fc*.npy'))
+            not_injected = _glob_paths(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{train_filters}*[!fc].npy'))
             not_injected = list(set(not_injected) - set(injected))
 
         else:
@@ -145,8 +147,8 @@ def get_paths(args):
             not_injected = []
 
             for f in train_filters:
-                injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{f}*fc*.npy'))
-                not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{f}*[!fc].npy'))
+                injected     += _glob_paths(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{f}*fc*.npy'))
+                not_injected += _glob_paths(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{f}*[!fc].npy'))
                 not_injected = list(set(not_injected) - set(injected))
 
     else:
@@ -155,14 +157,14 @@ def get_paths(args):
 
         if len(train_filters) == 1:
             for pid in train_pids:
-                injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{train_filters}*fc*.npy'))
-                not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{train_filters}*[!fc].npy'))
+                injected     += _glob_paths(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{train_filters}*fc*.npy'))
+                not_injected += _glob_paths(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{train_filters}*[!fc].npy'))
 
         else:
             for pid in train_pids:
                 for f in train_filters:
-                    injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{f}*fc*.npy'))
-                    not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{f}*[!fc].npy'))
+                    injected     += _glob_paths(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{f}*fc*.npy'))
+                    not_injected += _glob_paths(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{f}*[!fc].npy'))
 
     print("INJECTED:",len(injected))
     print("NOT INJECTED:",len(not_injected))
@@ -176,18 +178,28 @@ def get_paths(args):
 def get_testloader(args):
 
     #test_paths = get_paths(args)        
-    test_paths = get_test_paths()        
+    test_paths = get_test_paths(args)
 
     syndata        = SynDatasetLabel(image_paths=test_paths, args=args)
     syndata_loader = DataLoader(dataset=syndata, batch_size=1, shuffle=True)
 
     return syndata_loader, test_paths
 
-def get_batch(dirs):
+def get_batch(dirs, sanity_checks=False):
     batch = []
     for i in dirs:
+        print(f"Reading from {i}...")
         data = np.load(i)
+        if sanity_checks:
+            if data.ndim != 2:
+                raise ValueError("Evaluation image must be a two-dimensional array")
+            if not np.isfinite(data).all():
+                raise ValueError("Evaluation image must contain only finite values")
+            if data.size == 0 or np.ptp(data) == 0:
+                raise ValueError("Evaluation image must have a nonzero range")
         batch.append(data)
+    if sanity_checks and not batch:
+        raise ValueError("Evaluation batch must contain at least one image")
     batch = np.concatenate(np.expand_dims(batch, axis=0))
     return batch
 
@@ -195,10 +207,10 @@ def get_exo_coords(image_path):
     idx_x  = image_path.rfind('x')
 
     if idx_x == -1:
-        x, y = 0, 0
+        x, y = 0, 0  # [pixel]
     else:
-        x = int(image_path[idx_x+1:idx_x+3])
-        y = int(image_path[idx_x+5:idx_x+7])
+        x = int(image_path[idx_x+1:idx_x+3])  # [pixel]
+        y = int(image_path[idx_x+5:idx_x+7])  # [pixel]
 
     return x,y
 
@@ -215,22 +227,28 @@ def get_batch_coord(coords_dict, idx, bs):
 
 def get_psf_info_bs1(injection_dir, pid):
 
-    root_dir = f"/data/scratch/bariskurtkaya/dataset/NIRCAM/train/{pid}/mastDownload/JWST/"
-    #root_dir = "/data/scratch/sarperyurtseven/dataset/NIRCAM/1386/mastDownload/JWST/"
+    root_dir = os.path.join(
+        get_dataset_dir(), "NIRCAM", "train", pid, "mastDownload", "JWST"
+    )
     sew = set()
     star_location_info = []        
     psf_name = '-'.join(injection_dir.split('/')[-1].split('-')[:4]) + '_psfstack.fits'
     complete_dirs = os.path.join(root_dir, psf_name)
-    psf_ = fits.open(complete_dirs)
-    #arcsec_per_pix = np.sqrt(psf_[1].header['PIXAR_A2'])
-    wcs = get_wcs(psf_)
-    ra, dec = get_ra_dec(psf_)
+    print(f"Reading from {complete_dirs}...")
+    with fits.open(complete_dirs) as psf_stack:
+        wcs = get_wcs(psf_stack)
+        ra, dec = get_ra_dec(psf_stack)
     sew.add((ra,dec))
     sky_coord = get_skycoord(ra, dec)
-    x, y = skycoord_to_pixel(wcs, sky_coord)
+    x, y = skycoord_to_pixel(wcs, sky_coord)  # [pixel]
     star_location_info.append((x,y))
         
     return star_location_info
+
+def get_arcsec_per_pixel(psf_path):
+    print(f"Reading from {psf_path}...")
+    with fits.open(psf_path) as psf_stack:
+        return np.sqrt(psf_stack[1].header['PIXAR_A2'])  # [arcsec / pixel]
 
 def get_augmentation_info1(img_path):
 
@@ -312,6 +330,34 @@ def get_related_confusion_entries(preds_dict, coords_dict, star_coords_dict, pro
         star_coords_dict['FN'].append(transformed_star)
         probs_dict['FN'].append(prob)
 
+def validate_classifier_outputs(logits, probabilities, enabled=False):
+    if not enabled:
+        return
+    if logits.ndim != 2 or logits.shape[0] == 0 or logits.shape[1] != 2:
+        raise ValueError("Classifier logits must have shape (batch, 2)")
+    if probabilities.shape != (logits.shape[0], 1):
+        raise ValueError("Classifier probabilities must have shape (batch, 1)")
+    if not bool(torch.isfinite(logits).all()):
+        raise FloatingPointError("Classifier logits must be finite")
+    if not bool(torch.isfinite(probabilities).all()):
+        raise ValueError("Classifier probabilities must be finite")
+    if bool(((probabilities < 0) | (probabilities > 1)).any()):
+        raise ValueError("Classifier probabilities must lie in [0, 1]")
+
+
+def validate_classifier_targets(targets, batch_size, enabled=False):
+    if not enabled:
+        return
+    if targets.ndim != 1 or targets.shape[0] != batch_size:
+        raise ValueError("Classifier targets must match the batch size")
+    if not bool(torch.isfinite(targets).all()):
+        raise ValueError("Classifier targets must be finite")
+    if targets.is_floating_point() and not bool((targets == targets.round()).all()):
+        raise ValueError("Classifier targets must be integer class indices")
+    if bool(((targets < 0) | (targets >= 2)).any()):
+        raise ValueError("Classifier targets must be binary class indices")
+
+
 def test_model(model, dataloader, args):
 
     #results = []
@@ -353,12 +399,14 @@ def test_model(model, dataloader, args):
 
     with torch.no_grad():
         for image, target, filtered_image, img_path in dataloader:
-            target = target.type(torch.LongTensor).to(args.device)
-
             if args.apply_lowpass:
                 batch = filtered_image.to(args.device)
             else:
                 batch = image.to(args.device)
+            validate_classifier_targets(
+                target, batch.shape[0], enabled=getattr(args, "sanity_checks", False)
+            )
+            target = target.type(torch.LongTensor).to(args.device)
 
             z = model.encode(batch)
             z = model.fc_layers(z)
@@ -367,11 +415,15 @@ def test_model(model, dataloader, args):
 
             pred = output.data.max(1, keepdim=True)[1]
             prob = output.data.max(1, keepdim=True)[0]
+            probability = torch.exp(prob)
+            validate_classifier_outputs(
+                z, probability, enabled=getattr(args, "sanity_checks", False)
+            )
 
             get_related_confusion_entries(preds_dict, coords_dict, star_coords_dict, probs_dict,  pred, prob, target, img_path[0])
             #results.append((img_path, pred, target))
 
-            probs.append(torch.exp(prob))
+            probs.append(probability)
             preds.append(pred.detach().cpu().numpy())
             targets.append(target.detach().cpu().numpy())
             #paths.append(img_path)
@@ -389,13 +441,15 @@ def test_model(model, dataloader, args):
  
     return preds_dict, coords_dict, star_coords_dict, probs_dict
 
-def visualize_results(results_dict, coords_dict, star_coords_dict):
+def visualize_results(
+    results_dict, coords_dict, star_coords_dict, sanity_checks=False
+):
     
 
-    step = 20 * 0.06259530358142339
-    step = round(step, 2)
-    labels = step * np.array([-2., -1., 0., 1., 2.])
-    axis_points = np.linspace(0, 80, 5)
+    step = 20 * 0.06259530358142339  # [arcsec]
+    step = round(step, 2)  # [arcsec]
+    labels = step * np.array([-2., -1., 0., 1., 2.])  # [arcsec]
+    axis_points = np.linspace(0, 80, 5)  # [pixel]
 
     save_path = '/'.join(args.model_path.split('/')[:-2])
     plot_save_path = os.path.join(save_path, 'confusion_plots')
@@ -408,7 +462,7 @@ def visualize_results(results_dict, coords_dict, star_coords_dict):
         if len(data) == 0:
             continue
 
-        batch = get_batch(data)
+        batch = get_batch(data, sanity_checks=sanity_checks)
 
         bs = min(4, len(data))
 
@@ -444,7 +498,7 @@ def visualize_results(results_dict, coords_dict, star_coords_dict):
             ax.set_xticks(axis_points, labels, fontsize=10, rotation=75)
 
         plt.subplots_adjust(wspace=.25, hspace=0)
-        plt.savefig(os.path.join(plot_save_path, f'{i}.jpg'), format='jpg', bbox_inches='tight', pad_inches=.1, dpi=200)
+        _save_figure(os.path.join(plot_save_path, f'{i}.jpg'), format='jpg', bbox_inches='tight', pad_inches=.1, dpi=200)
         plt.close()
 
 def colormap_auc_angular_distance(preds_dict, coords_dict, star_coords_dict, probs_dict, arcsec_per_pix):
@@ -461,7 +515,7 @@ def colormap_auc_angular_distance(preds_dict, coords_dict, star_coords_dict, pro
     plt.xlabel('Angular Distance (arcsec)')
     plt.ylabel('Area Under the Curve (AUC)')
     plt.title('AUC as a Function of Angular Distance')
-    plt.savefig(os.path.join(save_path, f'colormap_plot_auc_angular_distance.jpg'), format='jpg', bbox_inches='tight', pad_inches=.1, dpi=200)
+    _save_figure(os.path.join(save_path, 'colormap_plot_auc_angular_distance.jpg'), format='jpg', bbox_inches='tight', pad_inches=.1, dpi=200)
     plt.close()
 
 def get_angular_distances(preds_dict, coords_dict, star_coords_dict, probs_dict):
@@ -479,7 +533,7 @@ def get_angular_distances(preds_dict, coords_dict, star_coords_dict, probs_dict)
             x1, y1 = coords_dict[i][j]
             x2, y2 = star_coords_dict[i][j]
 
-            distance = calculate_distance(x1, y1, x2, y2)
+            distance = calculate_distance(x1, y1, x2, y2)  # [pixel]
             ultimate_dict['distances'].append(distance)
             ultimate_dict['target'].append(1 if i == 'TP' else 0)
             ultimate_dict['probs'].append(probs_dict[i][j][0][0].detach().cpu().numpy())
@@ -516,7 +570,7 @@ def colormap_auc_flux(preds_dict, probs_dict):
     plt.xlabel('Flux (1/flux)')
     plt.ylabel('Area Under the Curve (AUC)')
     plt.title('AUC as a Function of Flux')
-    plt.savefig(os.path.join(save_path, f'colormap_plot_auc_flux.jpg'), format='jpg', bbox_inches='tight', pad_inches=.1, dpi=200)
+    _save_figure(os.path.join(save_path, 'colormap_plot_auc_flux.jpg'), format='jpg', bbox_inches='tight', pad_inches=.1, dpi=200)
     plt.close()
 
 def get_fluxes(preds_dict, probs_dict):
@@ -557,20 +611,39 @@ def extract_flux_coefficient(path):
 
 
 
-args = inference_arg_parser()
+def main():
+    global args
 
-model = get_model(args.model_path, args.device)
-dataloader, test_paths = get_testloader(args)
+    args = inference_arg_parser()
+    model = get_model(args.model_path, args.device)
+    dataloader, test_paths = get_testloader(args)
 
-arcsec_per_pixel = np.sqrt(fits.open(glob.glob(f'/data/scratch/bariskurtkaya/dataset/NIRCAM/train/{args.train_pids}/mastDownload/JWST/*psfstack.fits')[0])[1].header['PIXAR_A2'])
+    psf_directory = os.path.join(
+        get_dataset_dir(), "NIRCAM", "train", args.train_pids, "mastDownload", "JWST"
+    )
+    psf_path = _glob_paths(os.path.join(psf_directory, "*psfstack.fits"))[0]
+    arcsec_per_pixel = get_arcsec_per_pixel(psf_path)
 
-preds_dict, coords_dict, star_coords_dict, probs_dict = test_model(model, dataloader, args)
-visualize_results(preds_dict, coords_dict, star_coords_dict)
+    preds_dict, coords_dict, star_coords_dict, probs_dict = test_model(
+        model, dataloader, args
+    )
+    visualize_results(
+        preds_dict, coords_dict, star_coords_dict,
+        sanity_checks=args.sanity_checks,
+    )
 
-ultimate_dict = get_angular_distances(preds_dict, coords_dict, star_coords_dict, probs_dict)
-df = pd.DataFrame(ultimate_dict)
-df['flux_coefficients'] = df['img_paths'].apply(extract_flux_coefficient)
-df['probs'] = np.exp(df['probs'])
-df.to_csv('results_fixed_.csv', index=False)
-#colormap_auc_angular_distance(preds_dict, coords_dict, star_coords_dict, probs_dict, arcsec_per_pixel)
-#colormap_auc_flux(preds_dict, probs_dict)
+    ultimate_dict = get_angular_distances(
+        preds_dict, coords_dict, star_coords_dict, probs_dict
+    )
+    dataframe = pd.DataFrame(ultimate_dict)
+    dataframe['flux_coefficients'] = dataframe['img_paths'].apply(
+        extract_flux_coefficient
+    )
+    dataframe['probs'] = np.exp(dataframe['probs'])
+    results_path = os.path.join(PLOT_SAVE_PATH, 'results_fixed_.csv')
+    print(f"Writing to {results_path}...")
+    dataframe.to_csv(results_path, index=False)
+
+
+if __name__ == "__main__":
+    main()

@@ -3,9 +3,9 @@ from torch.utils.data import Dataset, DataLoader
 import torch.nn as nn
 from torch.nn import functional as F
 from torchvision import transforms
-from tqdm.auto import tqdm
 import os
 from torch import nn
+from tdpy.verbosity import print, tqdm
 
 from ..utils.data_utils import *
 from ..utils.variable_utils import *
@@ -106,6 +106,8 @@ class ExoClassifier(nn.Module):
 
         optimizer  = sgd_optim if self.args.optim == 'sgd' else adam_optim 
         EPOCH = self.args.epoch
+        if EPOCH <= 0:
+            raise ValueError("epoch must be positive")
 
         with tqdm(total=len(train_dataloader)*EPOCH) as tt:
 
@@ -139,7 +141,9 @@ class ExoClassifier(nn.Module):
 
                 batch_loss = batch_loss / (idx+1)
                 
-                torch.save(model, os.path.join(save_path, f'model.pt'))
+                model_path = os.path.join(save_path, 'model.pt')
+                print(f"Writing to {model_path}...")
+                torch.save(model, model_path)
 
                 if idx % 300 == 0:
                     plot_inputs_classifier(batch, save_path, epoch, idx)
@@ -147,5 +151,5 @@ class ExoClassifier(nn.Module):
                 total_loss += batch_loss
                 print('Batch_loss:', batch_loss) 
             
-            total_loss = total_loss / epoch 
+            total_loss = total_loss / EPOCH
             print('Total_loss:', total_loss) 

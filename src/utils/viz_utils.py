@@ -15,11 +15,81 @@ from astropy.coordinates import SkyCoord  # High-level coordinates
 from astropy.coordinates import ICRS, Galactic, FK4, FK5
 from astropy.coordinates import Angle, Latitude, Longitude  # Angles
 import astropy.units as u
+from tdpy.verbosity import print
 
 def plot_correlation_matrix(dataframe):
     plt.figure(figsize=(10, 8))
     sns.heatmap(dataframe.corr(), annot=True, cmap='coolwarm')
     plt.show()
+
+
+def plot_correlation_matrix_bokeh(dataframe, output_path):
+    from bokeh.models import BasicTicker, ColorBar, ColumnDataSource, HoverTool, LinearColorMapper
+    from bokeh.palettes import RdBu11
+    from bokeh.plotting import figure, output_file, save
+
+    correlation = dataframe.corr(numeric_only=True)
+    feature_names = [str(column) for column in correlation.columns]
+    if not feature_names:
+        raise ValueError("dataframe must contain at least one numeric column")
+
+    source = ColumnDataSource(
+        data={
+            "x": [feature_names[column] for row in range(len(feature_names)) for column in range(len(feature_names))],
+            "y": [feature_names[row] for row in range(len(feature_names)) for column in range(len(feature_names))],
+            "correlation": [
+                correlation.iloc[row, column]
+                for row in range(len(feature_names))
+                for column in range(len(feature_names))
+            ],
+        }
+    )
+    color_mapper = LinearColorMapper(
+        palette=RdBu11, low=-1, high=1, nan_color="#d9d9d9"
+    )
+    plot_size = max(450, min(1000, 48 * len(feature_names) + 180))
+    chart = figure(
+        title="Feature correlation (Pearson r)",
+        x_range=feature_names,
+        y_range=list(reversed(feature_names)),
+        width=plot_size,
+        height=plot_size,
+        tools="pan,wheel_zoom,box_zoom,reset,save",
+        toolbar_location="above",
+    )
+    chart.rect(
+        x="x",
+        y="y",
+        width=1,
+        height=1,
+        source=source,
+        fill_color={"field": "correlation", "transform": color_mapper},
+        line_color="white",
+    )
+    chart.add_tools(
+        HoverTool(
+            tooltips=[
+                ("Feature pair", "@x / @y"),
+                ("Pearson r", "@correlation{0.000}"),
+            ]
+        )
+    )
+    chart.add_layout(
+        ColorBar(
+            color_mapper=color_mapper,
+            ticker=BasicTicker(desired_num_ticks=5),
+            title="Pearson r",
+        ),
+        "right",
+    )
+    chart.xaxis.major_label_orientation = 0.8
+
+    output_path = os.fspath(output_path)
+    print(f"Writing to {output_path}...")
+    output_file(output_path, title="Feature correlation")
+    save(chart)
+    return chart
+
 
 def init_wandb(args):
     import wandb
@@ -35,8 +105,15 @@ def init_wandb(args):
 )
 
 def save_dict_as_yaml(dic, path):
+    print(f"Writing to {path}...")
     with open(path, 'w') as outfile:
         yaml.dump(dic, outfile, default_flow_style=False)
+
+
+def _save_figure(path):
+    print(f"Writing to {path}...")
+    plt.savefig(path, format='jpg', bbox_inches='tight', pad_inches=0, dpi=200)
+    plt.close()
 
 def calculate_conv_dims(input_size,paddings:list,kernels:list,strides:list,maxpool:list):
     
@@ -69,7 +146,7 @@ def calculate_convtrans_dim(input_size,paddings:list,kernels:list,strides:list):
 
 
 def get_test_dirs(test):
-    
+    print("Writing to text_dirs.txt...")
     with open(r'text_dirs.txt', 'w') as fp:
         for item in test:
             fp.write("%s\n" % item)
@@ -158,8 +235,7 @@ def plot_results_filtered(imgs, recons, filtered, save_path, epoch, idx, image_p
                 #axes[row][col].set_xticks([])
 
     plt.subplots_adjust(wspace=0,hspace=0)
-    plt.savefig(os.path.join(save_path,f'fig_{epoch}_{idx}.jpg'),format='jpg',bbox_inches='tight',pad_inches=0,dpi=200)
-    plt.close()
+    _save_figure(os.path.join(save_path, f'fig_{epoch}_{idx}.jpg'))
 
 def plot_results(imgs, recons, save_path, epoch, idx, image_paths):
 
@@ -230,8 +306,7 @@ def plot_results(imgs, recons, save_path, epoch, idx, image_paths):
                 #axes[row][col].set_xticks([])
 
     plt.subplots_adjust(wspace=0,hspace=0)
-    plt.savefig(os.path.join(save_path,f'fig_{epoch}_{idx}.jpg'),format='jpg',bbox_inches='tight',pad_inches=0,dpi=200)
-    plt.close()
+    _save_figure(os.path.join(save_path, f'fig_{epoch}_{idx}.jpg'))
 
 
 
@@ -239,7 +314,7 @@ def plot_inputs_classifier(imgs, save_path, epoch, idx):
 
     bs = 8 #imgs.size(0)
 
-    fig, axes = plt.subplots(nrows=1,ncols=bs,figsize=(bs*1.5,3.5))
+    fig, axes = plt.subplots(nrows=1,ncols=bs,figsize=(bs*1.5,3.5),squeeze=False)
 
     for i, (row,col) in enumerate(product(range(1),range(bs))):
         
@@ -250,5 +325,4 @@ def plot_inputs_classifier(imgs, save_path, epoch, idx):
             axes[row][col].set_xticks([])
 
     plt.subplots_adjust(wspace=0,hspace=0)
-    plt.savefig(os.path.join(save_path,f'fig_{epoch}_{idx}.jpg'),format='jpg',bbox_inches='tight',pad_inches=0,dpi=200)
-    plt.close()
+    _save_figure(os.path.join(save_path, f'fig_{epoch}_{idx}.jpg'))

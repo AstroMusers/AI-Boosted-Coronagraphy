@@ -3,13 +3,19 @@ import pandas as pd
 
 import torch
 import torch.nn as nn
+from tdpy.verbosity import print
 
 class Augmentation():
     def __init__(self):
         print("Augmentation class init")
     
-    def normalize(self, img):
+    def normalize(self, img, sanity_checks=False):
         # print("Normalization")
+        if sanity_checks:
+            if not np.isfinite(img).all():
+                raise ValueError("Image must contain only finite values")
+            if img.max() <= img.min():
+                raise ValueError("Image must have a nonzero range")
         return (img - img.min()) / (img.max() - img.min())
 
     def rotate90(self, img, times=1):
@@ -45,9 +51,11 @@ class AugmentationGPU(nn.Module):
 
 
 def load_csv(filepath):
+    print(f"Reading from {filepath}...")
     return pd.read_csv(filepath)
 
 def save_csv(dataframe, filepath):
+    print(f"Writing to {filepath}...")
     dataframe.to_csv(filepath, index=False)
 
 def train_test_split(data, test_size=0.2):

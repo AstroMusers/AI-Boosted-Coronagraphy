@@ -14,6 +14,7 @@ from src.utils.variable_utils import *
 from src.utils.viz_utils import *
 from src.data.dataloaders import SynDatasetLabel
 from src.models.exo_classifier import ExoClassifier
+from tdpy.verbosity import print
 
 
 def train_arg_parser():
@@ -30,6 +31,7 @@ def train_arg_parser():
     parser.add_argument('--optim', type=str, default='adam')
     parser.add_argument('--scheduler', action='store_true', help='If true set scheduler')
     parser.add_argument('--apply_lowpass', action='store_true', help='If true apply low pass filter to the input images')
+    parser.add_argument('--sanity_checks', action='store_true')
     parser.add_argument('--train_pids', type=str, default='1386', help='Choose the pids to train the model on (use * for all programs)')
     parser.add_argument('--train_filters', type=str, default='*', help='Choose the filters to train the model on (f300m, f277w, f356w, f444w) (use * for all filters)')
     parser.add_argument('--mode', type=str, default='train', help='Choose the mode (train, test)')
@@ -50,44 +52,43 @@ def get_arc_params():
 
 def get_paths(args):
 
-    train_pids = args.train_pids.split(' ')
-    train_filters = args.train_filters.split(' ')
+    train_pids = args.train_pids.split()
+    train_filters = args.train_filters.split()
     mode = args.mode
+    if not train_pids or not train_filters:
+        raise ValueError("At least one proposal ID and filter are required")
 
-    if len(train_pids) == 1:
-        train_pids = train_pids[0]
+    def find_paths(pattern, limit=None):
+        print(f"Reading from {pattern}...")
+        paths = glob.glob(pattern)
+        return paths if limit is None else paths[:limit]
 
-        if len(train_filters) == 1:
-            train_filters = train_filters[0]
-            injected     = glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{train_filters}*fc*.npy'))[:30000]
-            not_injected = glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{train_filters}*[!fc].npy'))[:55000]
-            not_injected = list(set(not_injected) - set(injected))
-
-        else:
-            injected_ = []
-            not_injected_ = []
-
-            for f in train_filters:
-                injected_.append(glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{f}*fc*.npy'))[:30000])
-                not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{train_pids}/injections/*{f}*[!fc].npy'))[:60000]
-                not_injected_.append(list(set(not_injected) - set(injected)))
-
+    injected = []
+    not_injected = []
+    if len(train_pids) == 1 and len(train_filters) == 1:
+        proposal_id = train_pids[0]
+        filter_name = train_filters[0]
+        prefix = os.path.join(NIRCAM_DATA, f"{mode}/{proposal_id}/injections")
+        injected = find_paths(os.path.join(prefix, f"*{filter_name}*fc*.npy"), 30000)
+        not_injected = find_paths(os.path.join(prefix, f"*{filter_name}*[!fc].npy"), 55000)
+        not_injected = list(set(not_injected) - set(injected))
+    elif len(train_pids) == 1 or len(train_filters) == 1:
+        for proposal_id in train_pids:
+            for filter_name in train_filters:
+                prefix = os.path.join(NIRCAM_DATA, f"{mode}/{proposal_id}/injections")
+                injected.extend(
+                    find_paths(os.path.join(prefix, f"*{filter_name}*fc*.npy"), 30000)
+                )
+                not_injected.extend(
+                    find_paths(os.path.join(prefix, f"*{filter_name}*[!fc].npy"), 60000)
+                )
+        not_injected = list(set(not_injected) - set(injected))
     else:
-        injected = []
-        not_injected = []
-        print(train_pids,train_filters)
-        if len(train_filters) == 1:
-            for pid in train_pids:
-                injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{train_filters[0]}*fc*.npy'))[:30000]
-                print(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{train_filters}*fc*.npy'))
-                not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{train_filters[0]}*[!fc].npy'))[:60000]
-                not_injected = list(set(not_injected) - set(injected))
-
-        else:
-            for pid in train_pids:
-                for f in train_filters:
-                    injected     += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{f}*fc*.npy'))
-                    not_injected += glob.glob(os.path.join(NIRCAM_DATA,f'{mode}/{pid}/injections/*{f}*[!fc].npy'))
+        for proposal_id in train_pids:
+            for filter_name in train_filters:
+                prefix = os.path.join(NIRCAM_DATA, f"{mode}/{proposal_id}/injections")
+                injected.extend(find_paths(os.path.join(prefix, f"*{filter_name}*fc*.npy")))
+                not_injected.extend(find_paths(os.path.join(prefix, f"*{filter_name}*[!fc].npy")))
 
     print("INJECTED:",len(injected))
     print("NOT INJECTED:",len(not_injected))
@@ -99,21 +100,26 @@ def get_paths(args):
     return paths
 
 
-args = train_arg_parser()
-init_wandb(args)
-train_paths = get_paths(args=args)
+def main():
+    args = train_arg_parser()
+    init_wandb(args)
+    train_paths = get_paths(args=args)
 
-syndata        = SynDatasetLabel(image_paths=train_paths, args=args)
-syndata_loader = DataLoader(dataset=syndata, batch_size=args.batch_size, shuffle=True)
+    syndata = SynDatasetLabel(image_paths=train_paths, args=args)
+    syndata_loader = DataLoader(
+        dataset=syndata, batch_size=args.batch_size, shuffle=True
+    )
+    convdim_outputs, kernels_enc, strides_enc = get_arc_params()
+    model = ExoClassifier(
+        args=args,
+        in_channels=1,
+        latent_dim=32,
+        convdim_enc_outputs=convdim_outputs,
+        kernels=kernels_enc,
+        strides=strides_enc,
+    )
+    model.train_model(model=model, train_dataloader=syndata_loader)
 
-convdim_outputs, kernels_enc, strides_enc = get_arc_params()
 
-
-model = ExoClassifier(args=args,
-               in_channels=1,
-               latent_dim=32,
-               convdim_enc_outputs=convdim_outputs, 
-               kernels=kernels_enc, 
-               strides=strides_enc)
-
-model.train_model(model=model,train_dataloader=syndata_loader)
+if __name__ == "__main__":
+    main()

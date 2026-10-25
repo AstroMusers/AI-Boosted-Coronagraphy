@@ -5,6 +5,8 @@ import numpy as np
 
 import os
 import glob
+from src.utils import get_dataset_dir
+from tdpy.verbosity import print
 
 class SynDatasetLabel(Dataset):
 
@@ -28,25 +30,45 @@ class SynDatasetLabel(Dataset):
         else:
             label = torch.squeeze(torch.Tensor([0]))
 
+        print(f"Reading from {image_path}...")
         image = np.load(image_path).astype(np.float32)
+        sanity_checks = getattr(self.args, "sanity_checks", False)
+        if sanity_checks:
+            if not np.isfinite(image).all():
+                raise ValueError("Classifier image must contain only finite values")
+            if image.size == 0 or np.ptp(image) == 0:
+                raise ValueError("Classifier image must have a nonzero range")
 
         if self.args.apply_lowpass:
             filtered_img = self.apply_low_pass(image)
 
         image = self.transform(image)
+        if sanity_checks and not bool(torch.isfinite(image).all()):
+            raise ValueError("Transformed classifier image must contain only finite values")
 
-        batch = (image, label, self.transform(filtered_img) if self.args.apply_lowpass else 0, image_path)
+        filtered_image = 0
+        if self.args.apply_lowpass:
+            filtered_image = self.transform(filtered_img)
+            if sanity_checks and not bool(torch.isfinite(filtered_image).all()):
+                raise ValueError("Low-pass classifier image must contain only finite values")
+
+        batch = (image, label, filtered_image, image_path)
 
         return batch
 
 class SynthDatasetv2(Dataset):
-    def __init__(self, dataset_path='/data/scratch/bariskurtkaya/dataset/torch_dataset_injection/', data_type='train', num_injection=10):
+    def __init__(self, dataset_path=None, data_type='train', num_injection=10):
+        if dataset_path is None:
+            dataset_path = os.path.join(get_dataset_dir(), "torch_dataset_injection")
         psf_dicts = []
         labels = []
 
-        psf_paths = glob.glob(os.path.join(dataset_path, data_type, '*.pth'))
+        pattern = os.path.join(dataset_path, data_type, '*.pth')
+        print(f"Reading from {pattern}...")
+        psf_paths = glob.glob(pattern)
 
         for psf_path in psf_paths:
+            print(f"Reading from {psf_path}...")
             torch_psf = torch.load(psf_path, weights_only=False)
 
             if type(torch_psf) == tuple:

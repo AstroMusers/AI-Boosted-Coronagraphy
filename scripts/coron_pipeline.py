@@ -18,7 +18,11 @@ from jwst.associations import generate
 from jwst.pipeline.calwebb_coron3 import Coron3Pipeline
 
 from src.utils import get_dataset_dir, INSTRUME, List
+from tdpy.verbosity import print
 
+def _glob_paths(pattern):
+    print(f"Reading from {pattern}...")
+    return glob.glob(pattern)
 
 
 class CoronPipeline():
@@ -40,11 +44,11 @@ class CoronPipeline():
 
         self.detector = 'nrcalong'
 
-        rateints_files = glob.glob(os.path.join(
+        rateints_files = _glob_paths(os.path.join(
             self.dataset_dir, f'**/*rateints.fits'))
         if rateints_files == []:
             self.detector = 'nrca2'
-            rateints_files = glob.glob(os.path.join(
+            rateints_files = _glob_paths(os.path.join(
                 self.dataset_dir, f'**/*{self.detector}_rateints.fits'))
         
         if rateints_check:
@@ -57,7 +61,9 @@ class CoronPipeline():
             for rateints_files_batch in rateints_files[index:index+batch_size]:
                 output_dir = '/'.join(rateints_files_batch.split('/')
                                       [:-1]) + '/'
-                
+
+                print(f"Reading from {rateints_files_batch}...")
+                print(f"Writing to {output_dir}...")
                 #img2pipeline.output_dir = output_dir
                 #img2pipeline.save_results = True
                 img2pipeline.call(rateints_files_batch, save_results=True, output_dir=output_dir)
@@ -65,7 +71,7 @@ class CoronPipeline():
         del rateints_files, img2pipeline, batch_size
 
     def pipeline_stage3(self, asn_check: bool = False, calints_check: bool = False):
-        calints_files = glob.glob(os.path.join(
+        calints_files = _glob_paths(os.path.join(
             self.dataset_dir, f'**/*calints.fits'))
 
         if calints_check:
@@ -85,6 +91,7 @@ class CoronPipeline():
             for key, value in zip(asn.keys(), asn.values()):
                 asn_dict[key] = value
 
+            print(f"Writing to {self.dataset_dir}...")
             coron3_pipeline.process(asn_dict)
 
         del asn_files, calints_files, asn_dict, coron3_pipeline
@@ -92,8 +99,9 @@ class CoronPipeline():
     def calints_check(self, calints_files):
         print(
             f'Calints control: \n Total Calints: {len(calints_files)} \n First Calints info:')
-        calints_sample = fits.open(calints_files[0])
-        calints_sample.info()
+        print(f"Reading from {calints_files[0]}...")
+        with fits.open(calints_files[0]) as calints_sample:
+            calints_sample.info()
 
     def asn_check(self, asn_files):
         print(
@@ -104,10 +112,13 @@ class CoronPipeline():
             f'Rateints control: \n Total Rateints: {len(rateints_files)} \n First Rateints info: {rateints_files[0]}')
 
     def asn_file_creation(self, calints_files):
+        for filepath in calints_files:
+            print(f"Reading from {filepath}...")
         pool = mkpool(calints_files)
         pool_df = pool.to_pandas()
-        pool_df.to_csv(
-            f'calints_{self.instrume}_{self.proposal_id}_pool.csv', index=False)
+        csv_path = f'calints_{self.instrume}_{self.proposal_id}_pool.csv'
+        print(f"Writing to {csv_path}...")
+        pool_df.to_csv(csv_path, index=False)
 
         asn_coron_rule_dir = inspect.getsourcefile(Asn_Lv3Coron)
         if asn_coron_rule_dir is None:

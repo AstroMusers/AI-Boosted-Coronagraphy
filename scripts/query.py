@@ -7,8 +7,9 @@ sys.path.append(project_root)
 from astropy.table import unique, vstack
 from astroquery.mast import Observations
 import jwst
-from src.utils import get_mast_token, get_util_main_dir, get_main_dir
+from src.utils import get_dataset_dir, get_mast_token, get_util_main_dir, get_main_dir
 from src.utils import List
+from tdpy.verbosity import print
 
 
 
@@ -69,6 +70,7 @@ class Query:
         dataset_dir = main_dataset_dir
         dataset_dir = dataset_dir + f"/{self.instrume}/{self.proposal_id}"
         try:
+            print(f"Writing to {dataset_dir}...")
             print(
                 f"Observations are downloading from Mast Server. \n Download Info: \n Instrume: {self.instrume} \n Proposal_id: {self.proposal_id} \n Dir: {dataset_dir}")
             self.coron_files = Observations.download_products(
@@ -80,7 +82,7 @@ class Query:
         del dataset_dir
 
 
-if __name__ == "__main__":
+def main():
 
 
     proposal_ids : List[str] = ['1194']
@@ -89,7 +91,7 @@ if __name__ == "__main__":
 
     psgd= ['RATEINTS']
 
-    main_dataset_dir: str = '/data/scratch/sarperyurtseven/'
+    main_dataset_dir: str = get_dataset_dir()
 
     # Class init
     query = Query()
@@ -101,3 +103,7 @@ if __name__ == "__main__":
         # Get and download proposal products
         query.get_proposal_products(instrume=instrume, proposal_id=proposal_id, psgd=psgd, instrument_names=instrument_names)
         query.download_files(main_dataset_dir=main_dataset_dir)
+
+
+if __name__ == "__main__":
+    main()

@@ -24,7 +24,7 @@ class MLPNetwork(nn.Module):
 
         self.classifier = nn.Linear(128, out_class)
     
-    def forward(self, x: torch.Tensor):
+    def _logits(self, x: torch.Tensor):
         batch, width, height = x.shape
 
         x = x.view(batch, -1)
@@ -34,11 +34,13 @@ class MLPNetwork(nn.Module):
         x = self.MLP3(x)
         x = self.classifier(x)
 
-        return F.softmax(x, dim=1)
+        return x
+
+    def forward(self, x: torch.Tensor):
+        return F.softmax(self._logits(x), dim=1)
     
     def get_loss(self, x, gt):
-        pred = self.forward(x)
-        return F.cross_entropy(pred, gt)
+        return F.cross_entropy(self._logits(x), gt)
 
     
     def get_accuracy(self, x, gt):

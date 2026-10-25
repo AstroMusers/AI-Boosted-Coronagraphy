@@ -2,10 +2,8 @@ import os
 import sys
 from glob import glob
 from time import time
-from tqdm import tqdm
 import numpy as np
 import warnings
-import webbpsf
 import torch
 import math
 
@@ -19,10 +17,14 @@ from astropy.utils.exceptions import AstropyWarning
 project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 sys.path.append(project_root)
 
-if not os.environ.get('WEBBPSF_PATH'):
-    os.environ['WEBBPSF_PATH'] = '/data/webbpsf-data'
-
 from src.utils import get_filename_from_dir, get_dataset_dir, get_stage3_products, Augmentation, List
+
+if not os.environ.get('WEBBPSF_PATH'):
+    os.environ['WEBBPSF_PATH'] = os.path.join(get_dataset_dir(), "webbpsf-data")
+
+import webbpsf
+
+from tdpy.verbosity import print, tqdm
 
 warnings.simplefilter('ignore', category=AstropyWarning)
 
@@ -46,22 +48,23 @@ class Injection():
                         num_rand_flux: int = 100, 
                         normalize_psf: bool = False, 
                         inject_filename: str = 'injections_train', 
-                        flux_coefficients = [1e-3, 1e-9]) -> None:
+                        flux_coefficients = [1e-3, 1e-9],
+                        sanity_checks: bool = False) -> None:
 
         self.flux_coef = flux_coefficients
         aug_count = int(aug_count)
         num_rand_flux = int(aug_count)
 
         for filter_key in self.psfstacks.keys():
-            max_pixel_distance, min_pixel_distance = self.__get_max_min_pixel_distance(self.psfstacks[filter_key])
+            max_pixel_distance, min_pixel_distance = self.__get_max_min_pixel_distance(self.psfstacks[filter_key])  # [pixel]
             
             print(f'{filter_key} max pixel distance: {max_pixel_distance}, min pixel distance: {min_pixel_distance}')
-            fov = np.round(np.sqrt(self.psfstacks[filter_key][1].header['PIXAR_A2']), 3) * self.psfstacks[filter_key][1].data.shape[1]
+            fov = np.round(np.sqrt(self.psfstacks[filter_key][1].header['PIXAR_A2']), 3) * self.psfstacks[filter_key][1].data.shape[1]  # [arcsec]
             print(fov)
 
-            pix_per_arcsec = np.sqrt(self.psfstacks[filter_key][1].header['PIXAR_A2'])
-            max_pix = int(1.5 / pix_per_arcsec)
-            size    = 80
+            pix_per_arcsec = np.sqrt(self.psfstacks[filter_key][1].header['PIXAR_A2'])  # [arcsec / pixel]
+            max_pix = int(1.5 / pix_per_arcsec)  # [pixel]
+            size = 80  # [pixel]
             
             detector = self.psfstacks[filter_key][0].header['DETECTOR']
             filter = self.psfstacks[filter_key][0].header['FILTER']
@@ -74,10 +77,12 @@ class Injection():
                 generated_psf_selection = 0
             
             for psf_idx, psf in enumerate(tqdm(self.psfstacks[filter_key][1].data)):
-                psf = self.__nan_elimination(psf)
+                psf = self.__nan_elimination(psf, sanity_checks=sanity_checks)
 
                 if normalize_psf:
-                    psf = self.augmentation.normalize(psf)
+                    psf = self.augmentation.normalize(
+                        psf, sanity_checks=sanity_checks
+                    )
                 
                 width, height = psf.shape
                 psf_res = (height - size) // 2
@@ -98,7 +103,8 @@ class Injection():
                     max_pix = max_pix,
                     num_rand_flux=num_rand_flux,
                     injection_count=injection_count, 
-                    filename=filename
+                    filename=filename,
+                    sanity_checks=sanity_checks,
                     )
 
                 for _ in range(aug_count):
@@ -112,7 +118,8 @@ class Injection():
                         max_pix = max_pix,
                         num_rand_flux=num_rand_flux,
                         injection_count=injection_count, 
-                        filename=aug_filename
+                        filename=aug_filename,
+                        sanity_checks=sanity_checks,
                     )
 
                 for _ in range(aug_count):
@@ -125,8 +132,41 @@ class Injection():
                     min_pixel_distance:int, 
                     max_pix:int,
                     num_rand_flux:int=100,
-                    filename:str=''
+                    injection_count:int=1,
+                    filename:str='',
+                    sanity_checks: bool = False,
         ):
+        if injection_count != 1:
+            raise ValueError("CPU injection currently supports one source per PSF")
+        if sanity_checks:
+            if (
+                isinstance(num_rand_flux, (bool, np.bool_))
+                or not isinstance(num_rand_flux, (int, np.integer))
+                or num_rand_flux <= 0
+            ):
+                raise ValueError("num_rand_flux must be a positive integer")
+            placement_bounds = np.asarray(
+                [max_pixel_distance, min_pixel_distance, max_pix], dtype=np.float64
+            )
+            flux_coefficients = np.asarray(self.flux_coef, dtype=np.float64)
+            if (
+                not np.isfinite(placement_bounds).all()
+                or (placement_bounds < 0).any()
+                or placement_bounds[0] < placement_bounds[1]
+                or placement_bounds[1] >= int(max_pix) // 2
+            ):
+                raise ValueError(
+                    "pixel placement bounds must be finite, nonnegative, ordered, and nonempty"
+                )
+            if (
+                flux_coefficients.shape != (2,)
+                or not np.isfinite(flux_coefficients).all()
+                or (flux_coefficients < 0).any()
+                or flux_coefficients[0] < flux_coefficients[1]
+            ):
+                raise ValueError(
+                    "flux_coef must be finite, nonnegative [maximum, minimum] bounds"
+                )
 
         if max_pixel_distance > psf.shape[0]:
             max_x = psf.shape[0]
@@ -141,18 +181,30 @@ class Injection():
         max_pix = int(max_pix)
 
         integral_psf = np.sum(psf)
-        generated_psf = self.augmentation.normalize(generated_psf)
+        generated_psf = self.augmentation.normalize(
+            generated_psf, sanity_checks=sanity_checks
+        )
 
-        random_x = np.random.randint(min_pixel_distance, max_pix//2)
-        random_y = np.random.randint(min_pixel_distance, max_pix//2)
+        random_x = np.random.randint(min_pixel_distance, max_pix//2)  # [pixel]
+        random_y = np.random.randint(min_pixel_distance, max_pix//2)  # [pixel]
 
         rand_sign_x = 1 if np.random.rand() < 0.5 else -1
         rand_sign_y = 1 if np.random.rand() < 0.5 else -1
 
-        x = int((psf.shape[0]/2) + rand_sign_x*random_x)
-        y = int((psf.shape[1]/2) + rand_sign_y*random_y)
+        x = int((psf.shape[0]/2) + rand_sign_x*random_x)  # [pixel]
+        y = int((psf.shape[1]/2) + rand_sign_y*random_y)  # [pixel]
 
         flux_value = self.__sample_flux(num_rand_flux)
+        if sanity_checks:
+            flux_tolerance = np.finfo(np.float32).eps * max(np.abs(flux_coefficients))
+            if (
+                not np.isfinite(flux_value)
+                or flux_value < flux_coefficients[1] - flux_tolerance
+                or flux_value > flux_coefficients[0] + flux_tolerance
+            ):
+                raise ValueError(
+                    "sampled flux must be finite and within flux_coef bounds"
+                )
         exo_flux = integral_psf * flux_value
         temp_psf = np.copy(generated_psf * exo_flux)
 
@@ -176,6 +228,7 @@ class Injection():
         return flux_list[0]
 
     def __save_psf_to_npy(self, filename, psf):
+        print(f"Writing to {filename}...")
         return np.save(filename, psf)
 
     def __augmentation(self, psf, computed_psf, filename:str='', not_save_override=False):
@@ -211,7 +264,12 @@ class Injection():
         del rotate_rand, flip_rand, vertical_shift_rand, horizontal_shift_rand, vertical_shift_pixel_rand, horizontal_shift_pixel_rand
         return augmented, filename, aug_comp_psf
 
-    def __nan_elimination(self, psf):
+    def __nan_elimination(self, psf, sanity_checks: bool = False):
+        if sanity_checks:
+            if not np.isfinite(psf).all():
+                raise ValueError("Input PSF must contain only finite values")
+            if psf.size == 0 or np.ptp(psf) == 0:
+                raise ValueError("Input PSF must have a nonzero range")
         return np.nan_to_num(psf)
 
     def __generate_psf_model(self, detector:str, filter:str, fov:float, coron_mask:str='', pupil_mask:str='', save:bool=True):
@@ -222,9 +280,11 @@ class Injection():
             detector = 'NRCB5'
 
         psf_dir = get_dataset_dir() + f'/PSF_SAMPLES/{detector}-{filter}_{coron_mask}_{pupil_mask}-{fov}.fits'
+        print(f"Reading from {psf_dir}...")
         psf_dir_glob = glob(psf_dir)
 
         if psf_dir_glob != []:
+            print(f"Reading from {psf_dir}...")
             generated_psf = fits.open(psf_dir)
             print(f'{detector}-{filter} PSF with {fov} arcsec fov collected from cache.')
             del psf_dir, psf_dir_glob
@@ -246,6 +306,7 @@ class Injection():
                 wpsf.pupil_mask = pupil_mask
 
             if save:
+                print(f"Writing to {psf_dir}...")
                 generated_psf = wpsf.calc_psf(fov_arcsec=fov, oversample=2, outfile=f'{psf_dir}')
             else:
                 generated_psf = wpsf.calc_psf(fov_arcsec=fov, oversample=2)
@@ -259,6 +320,7 @@ class Injection():
     def __create_psfstacks_dict(self) -> None:
         for _, dir in enumerate(self.psfstacks_nircam_dirs):
             fits_name = get_filename_from_dir(dir)
+            print(f"Reading from {dir}...")
             self.psfstacks[fits_name] = fits.open(dir)
 
             del fits_name
@@ -279,7 +341,7 @@ class Injection():
         target_star = query_results[min_idx]
 
         distance = (target_star['parallax'] *
-                    u.marcsec).to(u.parsec, equivalencies=u.parallax())
+                u.marcsec).to(u.parsec, equivalencies=u.parallax())  # [pc]
 
         query_exoplanets = NasaExoplanetArchive.query_criteria(
             table="pscomppars", where="discoverymethod like 'Imaging'")
@@ -290,14 +352,20 @@ class Injection():
         }
 
         one_pix_side_length_arcsec = np.sqrt(
-            psfstack[1].header['PIXAR_A2']) * u.arcsec
+            psfstack[1].header['PIXAR_A2']) * u.arcsec  # [arcsec / pixel]
         max_pixel_distance = exoplanet_extremes['max'] / (
-            distance.to(u.au) * np.tan(one_pix_side_length_arcsec))
+            distance.to(u.au) * np.tan(one_pix_side_length_arcsec))  # [pixel]
         min_pixel_distance = exoplanet_extremes['min'] / (
-            distance.to(u.au) * np.tan(one_pix_side_length_arcsec))
+            distance.to(u.au) * np.tan(one_pix_side_length_arcsec))  # [pixel]
 
         del ra, dec, u_ra, u_dec, coord, width, height, query_results, min_idx, target_star, distance, query_exoplanets, exoplanet_extremes, one_pix_side_length_arcsec
         return np.floor(max_pixel_distance.value), np.floor(min_pixel_distance.value) + 1
+
+
+def _get_psf_directory(instrume, state, proposal_id):
+    return os.path.join(
+        get_dataset_dir(), instrume, state, proposal_id, "mastDownload", "JWST"
+    )
 
 
 if __name__ == '__main__':
@@ -320,7 +388,7 @@ if __name__ == '__main__':
 
     for idx in range(len(pids)):
 
-        psf_directory = f'/data/scratch/bariskurtkaya/dataset/{instrume}/{state}/{pids[idx]}/mastDownload/JWST/'
+        psf_directory = _get_psf_directory(instrume, state, pids[idx])
 
         injection = Injection(psf_directory=psf_directory, 
                               is_save_original=is_save_original, 
