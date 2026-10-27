@@ -2539,6 +2539,50 @@ def test_evaluation_pixel_scale_reader_narrates_and_closes_fits(
     assert capsys.readouterr().out == f"Reading from {psf_path}...\n"
 
 
+def test_classifier_scripts_share_exo_classifier_architecture():
+    import ast
+
+    print(f"Reading from {EXO_CLASSIFIER_PATH}...")
+    model_tree = ast.parse(
+        EXO_CLASSIFIER_PATH.read_text(encoding="utf-8"), filename=str(EXO_CLASSIFIER_PATH)
+    )
+    print(f"Reading from {VIZ_UTILS_PATH}...")
+    visualization_tree = ast.parse(
+        VIZ_UTILS_PATH.read_text(encoding="utf-8"), filename=str(VIZ_UTILS_PATH)
+    )
+    shared_functions = [
+        next(
+            node for node in tree.body
+            if isinstance(node, ast.FunctionDef) and node.name == function_name
+        )
+        for tree, function_name in (
+            (visualization_tree, "calculate_conv_dims"),
+            (model_tree, "get_arc_params"),
+        )
+    ]
+    namespace = {"print": lambda *args, **kwargs: None}
+    exec(
+        compile(ast.Module(body=shared_functions, type_ignores=[]), str(EXO_CLASSIFIER_PATH), "exec"),
+        namespace,
+    )
+    assert namespace["get_arc_params"]() == (
+        [80, 38, 36, 34, 17], [7, 5, 5, 3], [2, 1, 1, 2]
+    )
+    for script_path in (TRAIN_CLASSIFIER_PATH, TEST_CLASSIFIER_PATH):
+        print(f"Reading from {script_path}...")
+        tree = ast.parse(script_path.read_text(encoding="utf-8"), filename=str(script_path))
+        assert any(
+            isinstance(node, ast.ImportFrom)
+            and node.module == "src.models.exo_classifier"
+            and any(alias.name == "get_arc_params" for alias in node.names)
+            for node in tree.body
+        )
+        assert not any(
+            isinstance(node, ast.FunctionDef) and node.name == "get_arc_params"
+            for node in tree.body
+        )
+
+
 def test_evaluation_model_path_defaults_to_repo_visuals_and_logs_read(
     monkeypatch, capsys, tmp_path
 ):

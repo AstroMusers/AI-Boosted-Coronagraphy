@@ -12,6 +12,17 @@ from ..utils.variable_utils import *
 from ..utils.viz_utils import *
 
 
+def get_arc_params():
+    kernels_enc = [7, 5, 5, 3]
+    paddings_enc = [1, 1, 1, 1]
+    strides_enc = [2, 1, 1, 2]
+    maxpool = [0 for _ in kernels_enc]
+    convdim_outputs = calculate_conv_dims(
+        80, paddings_enc, kernels_enc, strides_enc, maxpool
+    )
+    return convdim_outputs, kernels_enc, strides_enc
+
+
 class ExoClassifier(nn.Module):
     
     def __init__(self,

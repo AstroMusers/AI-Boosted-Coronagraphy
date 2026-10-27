@@ -1,11 +1,11 @@
 # AI-Boosted-Coronagraphy
 
 
-Coronagraphy asks us to find faint signals beside stars bright enough to drown them out. We use AI methods and JWST coronagraphic data workflows to explore that contrast problem. This guide covers the reference files and MAST access needed by the scripts.
+Coronagraphy asks us to find faint signals beside stars bright enough to drown them out. We use AI methods with JWST coronagraphic data to explore that contrast problem.
 
 ## Environment setup
 
-Install the dependencies listed in `requirements.txt` with `python -m pip install -r requirements.txt`. The pinned TDpy dependency provides shared repository-path helpers. Progress and file-operation messages are quiet by default.
+Install the dependencies listed in `requirements.txt` with `python -m pip install -r requirements.txt`. The pinned TDpy dependency provides shared repository-path helpers.
 
 Set `AI_BOOSTED_CORONAGRAPHY_PATH` to the checkout directory when the repository is not imported from its default location. If it is unset, the utilities use the checkout containing `src/utils/variable_utils.py`. Dataset inputs live under the ignored `data/` directory, and generated figures belong under the ignored `visuals/` directory.
 
@@ -56,4 +56,5 @@ from src.utils import plot_correlation_matrix_bokeh
 plot_correlation_matrix_bokeh(features, "visuals/feature_correlation.html")
 ```
 
-Hover over a cell to inspect its feature pair and correlation coefficient. The matrix summarizes pairwise linear associations. It does not measure classifier performance or establish causal relationships.
+Hover over a cell to inspect its feature pair and Pearson coefficient. Each
+coefficient summarizes the linear association between two numeric features.

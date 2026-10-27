@@ -13,7 +13,7 @@ from src.utils.data_utils import *
 from src.utils.variable_utils import *
 from src.utils.viz_utils import *
 from src.data.dataloaders import SynDatasetLabel
-from src.models.exo_classifier import ExoClassifier
+from src.models.exo_classifier import ExoClassifier, get_arc_params
 from tdpy.verbosity import print
 
 
@@ -37,18 +37,6 @@ def train_arg_parser():
     parser.add_argument('--mode', type=str, default='train', help='Choose the mode (train, test)')
     args = parser.parse_args()
     return args
-
-def get_arc_params():
-
-    kernels_enc = [7,5,5,3]
-    paddings_enc= [1,1,1,1]
-    strides_enc = [2,1,1,2]
-
-    maxpool = [0 for i in range(len(kernels_enc))]
-
-    convdim_outputs = calculate_conv_dims(80,paddings_enc,kernels_enc,strides_enc,maxpool)
-
-    return convdim_outputs, kernels_enc, strides_enc
 
 def get_paths(args):
 

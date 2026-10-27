@@ -9,5 +9,5 @@ pysynphot
 astroquery
 opencv-python
 jwst
-tdpy @ git+https://github.com/tansudaylan/tdpy.git@35df1703c6b63d6a62f7d44b12cf5928b5d355ed
+tdpy @ git+https://github.com/tansudaylan/tdpy.git@0d51a1af0acc4f62fc6cd742bb1ec3443a8e8eb9
 bokeh>=3
