@@ -348,6 +348,7 @@ def load_train_classifier(monkeypatch):
     models.__path__ = []
     classifier = types.ModuleType("src.models.exo_classifier")
     classifier.ExoClassifier = object
+    classifier.get_arc_params = lambda: ([], [], [])
     module_stubs = (
         ("src", source),
         ("src.utils", utils),
